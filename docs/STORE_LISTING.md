@@ -1,0 +1,205 @@
+# Chrome Web Store submission
+
+Everything needed to submit, in the form the review asks for it. The two reviewed fields —
+permission justifications and single purpose — are the ones that decide how long this takes, so
+they are written as answers rather than notes.
+
+**Reality check on timing:** this extension requests `nativeMessaging`, which routes it to manual
+review. Days to weeks, not hours. Nothing in the build affects that; only the justification text
+does.
+
+---
+
+## Listing
+
+**Name** — `Auto Language Switcher`
+
+**Summary** (132 char max)
+
+> Switches your Windows keyboard to the language you write in each conversation. Everything is
+> processed on your computer.
+
+**Category** — Productivity
+**Language** — English (Hebrew listing to follow)
+
+**Description**
+
+```
+You keep a supplier chat in English and a family chat in Hebrew. Windows does not remember which
+is which, so every switch between them costs an Alt+Shift — and you usually find out you forgot
+only after a line of gibberish.
+
+Auto Language Switcher reads which language YOU write in each conversation and sets your Windows
+keyboard layout before you start typing.
+
+HOW IT DECIDES
+
+It asks one question: what language is this person about to type here? Not the language of the
+conversation — the language of your half of it. Your own recent messages count for far more than
+what you receive.
+
+Below 70% confidence it changes nothing. Doing nothing costs one keystroke; switching wrongly
+mid-sentence costs a deleted line.
+
+IT STAYS OUT OF THE WAY
+
+• Never switches while you are typing
+• Never touches a window that is not in front
+• Backs off after you change the layout yourself
+• Pin any conversation to Hebrew or English — that beats everything
+• Selects the layout directly, never cycling blindly through your languages
+
+When it decides not to act, the popup says why in plain words.
+
+NOTHING LEAVES YOUR COMPUTER
+
+There is no server. No account, no telemetry, no update check — the extension holds no network
+permission at all. Messages are counted in the page and discarded; what reaches the rest of the
+product is a pair of numbers like { Hebrew: 9 }.
+
+Conversation names are phone numbers, so they are never stored. They are hashed with a random
+value created when you install.
+
+REQUIREMENTS
+
+• Windows 10 or 11
+• The Auto Language Switcher companion program (linked below) — a browser extension cannot
+  change a keyboard layout; only a native program can
+• Hebrew and English already added as Windows keyboard layouts
+
+Currently supports WhatsApp Web, Hebrew and English.
+```
+
+---
+
+## Permission justifications
+
+These are the reviewed fields. Each answers "why is this necessary", which is the question actually
+being asked.
+
+**`nativeMessaging`**
+
+> Changing a Windows keyboard layout requires a native program; no browser API can do it. The
+> extension sends a companion Windows application a language code and nothing else. The connection
+> is restricted to one named host, and that host accepts only this extension's ID.
+
+**`storage`**
+
+> Stores a single random value, generated at install, used to hash conversation identifiers before
+> they leave the page. No message content, contact names or settings are kept in browser storage.
+
+**Host permission — `https://web.whatsapp.com/*`**
+
+> The extension counts letters by alphabet in the currently open conversation to determine which
+> keyboard the user needs. This is the only site it can access; `<all_urls>` is not requested and
+> any future site would be added explicitly.
+
+**Remote code** — No. Everything is bundled; there is no `eval`, no remote script, no CDN.
+
+---
+
+## Single purpose
+
+> Setting the Windows keyboard layout to match the language the user writes in the conversation
+> they are viewing.
+
+Everything in the extension serves that: reading the conversation to determine the language,
+sending the result to the companion program that performs the switch, and a popup for overriding
+the decision.
+
+---
+
+## Data disclosure
+
+Every box: **not collected**.
+
+| Category | Collected |
+|---|---|
+| Personally identifiable information | No |
+| Health, financial, authentication information | No |
+| Personal communications | No |
+| Location, web history, user activity | No |
+| Website content | No |
+
+The last one deserves a note in the review comments, because the extension does *read* page
+content:
+
+> The extension reads displayed message text solely to count letters by Unicode range. The text is
+> discarded within the same function; only per-language counts leave the page. Nothing is
+> transmitted off the device — the extension has no network permission and makes no requests.
+
+All three certifications apply: no selling data, no unrelated use, no creditworthiness use.
+
+**Privacy policy URL** — required for approval. Publish `web/privacy.html` and link it here.
+
+---
+
+## Assets
+
+| Asset | Size | Status |
+|---|---|---|
+| Store icon | 128×128 PNG | Ready — `extension/public/icons/icon128.png` |
+| Screenshot 1 | 1280×800 | **Needed** — popup over a WhatsApp conversation, HE badge |
+| Screenshot 2 | 1280×800 | **Needed** — popup showing "too mixed to call", the restraint |
+| Screenshot 3 | 1280×800 | **Needed** — settings page |
+| Small promo tile | 440×280 | Optional |
+
+Screenshots must not show real contacts or message content. Use a test account with invented
+conversations — a privacy claim undercut by its own screenshots is worse than no screenshots.
+
+---
+
+## Before submitting
+
+- [ ] Privacy policy live at a public URL
+- [ ] `version` bumped in `extension/public/manifest.json`
+- [ ] `manifest.json` retains its `key`, so the published ID matches the native host allowlist
+- [ ] `.\build.ps1` clean, all tests passing
+- [ ] Selectors verified against live WhatsApp (`tools/whatsapp-selector-probe.js`)
+- [ ] Screenshots taken from a test account
+- [ ] Companion program downloadable from a public URL, linked in the description
+
+**The `key` field is the one that will bite.** Remove it and the store assigns a different
+extension ID, the native host allowlist stops matching, and every install fails with
+"agent not running" — while the extension itself looks perfectly healthy.
+
+---
+
+## Edge Add-ons
+
+Separate submission, same package, same justifications. Worth doing: the product supports Edge
+already, and the review queue is usually shorter.
+
+---
+
+## Code signing — start this first
+
+The longest lead time in the whole launch, and unrelated to any code.
+
+Without a signing certificate, SmartScreen warns on the companion program's installer and most
+people stop there. That makes it the gate on adoption, not the store listing.
+
+| | Cost/year | Reputation |
+|---|---|---|
+| OV certificate | ~$200–400 | Builds over weeks of downloads; warnings until then |
+| EV certificate | ~$300–500 | Immediate; hardware token required |
+
+For a consumer download with no existing reputation, EV is the one that works on day one.
+
+Once a certificate exists, `installer/AutoLang.iss` signs during the build:
+
+```
+iscc /S"signtool=signtool.exe sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 $f" installer\AutoLang.iss
+```
+
+---
+
+## Order of operations
+
+1. Order the certificate — everything else can proceed in parallel, and this cannot be hurried
+2. Publish the landing page and privacy policy
+3. Verify selectors against live WhatsApp
+4. Take screenshots from a test account
+5. Register the developer account ($5, one-off) and complete identity verification
+6. Submit to Chrome, then Edge
+7. Sign the installer as soon as the certificate arrives

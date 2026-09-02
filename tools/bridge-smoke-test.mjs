@@ -63,13 +63,33 @@ const requests = [
       protocolVersion: 1,
       source: 'browser',
       site: 'web.whatsapp.com',
-      conversationKey: 'smoketest0000000',
+      // 32 lowercase hex, the shape the content script produces. The Agent refuses anything
+      // else, so a shorter placeholder here would be rejected - as it was, silently, until this
+      // test started asserting the reply rather than only its type.
+      conversationKey: '9f2a4c8e1b3d5f7009f2a4c8e1b3d5f7',
       adapterVersion: '1.0.0',
       composerEmpty: true,
       observedAt: Date.now(),
       messages: [{ direction: 'outgoing', index: 0, counts: { Hebrew: 30 } }],
     },
-    check: (r) => r.type === 'decision',
+    // Asserting 'switched to Hebrew' would make this depend on which window happens to be in
+    // front when the test runs, and a browser is usually not. What must hold either way: the
+    // Agent decided, and if it did switch, it switched to Hebrew.
+    check: (r) =>
+      r.type === 'decision' &&
+      (r.outcome === 'Suppressed' ? r.blocker === 'NotForeground' : r.language === 'he-IL'),
+  },
+  {
+    label: 'a raw phone number as a conversation key is refused',
+    message: {
+      type: 'signal',
+      protocolVersion: 1,
+      site: 'web.whatsapp.com',
+      conversationKey: '972500000000@c.us',
+      observedAt: Date.now(),
+      messages: [{ direction: 'outgoing', index: 0, counts: { Hebrew: 30 } }],
+    },
+    check: (r) => r.type === 'error' && r.code === 'BAD_MESSAGE' && !JSON.stringify(r).includes('972'),
   },
   {
     label: 'malformed json is answered, not fatal',

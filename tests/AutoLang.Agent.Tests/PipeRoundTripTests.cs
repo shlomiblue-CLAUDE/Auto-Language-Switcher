@@ -23,6 +23,9 @@ public class PipeRoundTripTests : IDisposable
     private readonly Task _serverTask;
 
     /// <summary>Unique per test instance, so a real Agent on this machine is never contacted.</summary>
+    private const string HashedKey = "9f2a4c8e1b3d5f7009f2a4c8e1b3d5f7";
+    private const string HashedKeyA = "aaaa4c8e1b3d5f7009f2a4c8e1b3d5f7";
+
     private readonly string _pipeName = $"AutoLang.Test.{Guid.NewGuid():n}";
 
     public PipeRoundTripTests()
@@ -51,7 +54,7 @@ public class PipeRoundTripTests : IDisposable
         return client;
     }
 
-    private static string SignalJson(string key = "conv-1", string language = "Hebrew", long? observedAt = null) =>
+    private static string SignalJson(string key = HashedKey, string language = "Hebrew", long? observedAt = null) =>
         JsonSerializer.Serialize(new SignalMessage
         {
             Site = "web.whatsapp.com",
@@ -84,7 +87,7 @@ public class PipeRoundTripTests : IDisposable
 
         for (int i = 0; i < 5; i++)
         {
-            var query = JsonSerializer.Serialize(new QueryMessage { ConversationKey = $"conv-{i}" }, Wire.Json);
+            var query = JsonSerializer.Serialize(new QueryMessage { ConversationKey = HashedKey }, Wire.Json);
             await NativeMessagingCodec.WriteAsync(client, query);
 
             var reply = await NativeMessagingCodec.ReadAsync(client);
@@ -102,10 +105,10 @@ public class PipeRoundTripTests : IDisposable
         await using var chrome = await ConnectAsync();
         await using var edge = await ConnectAsync();
 
-        await NativeMessagingCodec.WriteAsync(chrome, SignalJson("conv-a", observedAt: _clock.Now.ToUnixTimeMilliseconds()));
+        await NativeMessagingCodec.WriteAsync(chrome, SignalJson(HashedKeyA, observedAt: _clock.Now.ToUnixTimeMilliseconds()));
         var chromeReply = await NativeMessagingCodec.ReadAsync(chrome);
 
-        await NativeMessagingCodec.WriteAsync(edge, JsonSerializer.Serialize(new QueryMessage { ConversationKey = "conv-a" }, Wire.Json));
+        await NativeMessagingCodec.WriteAsync(edge, JsonSerializer.Serialize(new QueryMessage { ConversationKey = HashedKeyA }, Wire.Json));
         var edgeReply = await NativeMessagingCodec.ReadAsync(edge);
 
         Assert.NotNull(chromeReply);
@@ -191,7 +194,7 @@ public class PipeRoundTripTests : IDisposable
         var command = JsonSerializer.Serialize(new CommandMessage
         {
             Command = "setMode",
-            ConversationKey = "שיחה-בעברית",
+            ConversationKey = HashedKey,
             Mode = "AlwaysHebrew",
         }, Wire.Json);
 

@@ -90,10 +90,45 @@ public sealed class AgentCore
         }
     }
 
+    /// <summary>
+    /// A conversation key must look like what the content script produces: 32 lowercase hex
+    /// characters from a salted SHA-256.
+    ///
+    /// Until this existed, the privacy guarantee rested entirely on the content script choosing to
+    /// hash. Anything else speaking this protocol - a second adapter, a future desktop source, a
+    /// test harness - could have written a phone number straight into conversations.json, and one
+    /// did: a test using a plain Hebrew string as a key left it sitting in the real store. Checking
+    /// the shape here makes the guarantee structural instead of a matter of good behaviour
+    /// elsewhere.
+    /// </summary>
+    private static bool IsHashedKey(string key)
+    {
+        if (key.Length != 32) return false;
+
+        foreach (char c in key)
+        {
+            bool hex = c is >= '0' and <= '9' or >= 'a' and <= 'f';
+            if (!hex) return false;
+        }
+        return true;
+    }
+
     private string? HandleSignal(SignalMessage signal)
     {
         if (string.IsNullOrWhiteSpace(signal.ConversationKey))
             return Serialize(new ErrorMessage { Code = ErrorCodes.BadMessage, Message = "Missing conversationKey." });
+
+        if (!IsHashedKey(signal.ConversationKey))
+        {
+            // Deliberately does not echo the key back. Refusing to store something identifying and
+            // then putting it in an error message would defeat the point.
+            _log("rejected a signal whose conversationKey is not a salted hash");
+            return Serialize(new ErrorMessage
+            {
+                Code = ErrorCodes.BadMessage,
+                Message = "conversationKey must be 32 lowercase hex characters. Raw identifiers are not accepted."
+            });
+        }
 
         var observedAt = DateTimeOffset.FromUnixTimeMilliseconds(signal.ObservedAt);
         var now = _clock.Now;
@@ -170,6 +205,8 @@ public sealed class AgentCore
             switch (command.Command)
             {
                 case "setMode" when command.ConversationKey is { } key:
+                    if (!IsHashedKey(key))
+                        return Serialize(new ErrorMessage { Code = ErrorCodes.BadMessage, Message = "conversationKey must be a salted hash." });
                     if (!Enum.TryParse<ConversationMode>(command.Mode, ignoreCase: true, out var mode))
                         return Serialize(new ErrorMessage { Code = ErrorCodes.BadMessage, Message = $"Unknown mode '{command.Mode}'." });
                     _store.SetMode(key, mode);
@@ -213,7 +250,7 @@ public sealed class AgentCore
                     break;
                 }
 
-                case "noteManualChange" when command.ConversationKey is { } manualKey:
+                case "noteManualChange" when command.ConversationKey is { } manualKey && IsHashedKey(manualKey):
                 {
                     // The user overrode us. Record it, start the cooldown, and reset hysteresis so
                     // the product cannot immediately undo what they just did.

@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auto Language Switcher — the right keyboard, before you type</title>
+<meta name="description" content="Switches your Windows keyboard layout to the language you write in each conversation. Everything happens on your computer.">
+<link rel="icon" href="icons/icon32.png">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --fg: #16161a; --muted: #55555f; --line: #e4e4ea;
+    --panel: #f8f8fb; --accent: #4f46e5; --accent-fg: #fff; --code: #f1f1f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #131316; --fg: #ececf1; --muted: #a3a3ae; --line: #2c2c33;
+      --panel: #1c1c21; --accent: #8b83f5; --accent-fg: #14141a; --code: #202027;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 20px; }
+  header { padding: 64px 0 40px; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 40px; }
+  .brand img { width: 32px; height: 32px; border-radius: 7px; }
+  .brand span { font-weight: 600; }
+  h1 { font-size: clamp(30px, 6vw, 42px); line-height: 1.15; margin: 0 0 16px; letter-spacing: -0.02em; }
+  .lede { font-size: 18px; color: var(--muted); margin: 0 0 28px; max-width: 34em; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn {
+    display: inline-block; padding: 11px 18px; border-radius: 8px; font-weight: 500;
+    text-decoration: none; background: var(--accent); color: var(--accent-fg);
+  }
+  .btn.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  .btn:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .note { font-size: 14px; color: var(--muted); margin-top: 14px; }
+  section { padding: 40px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 20px; margin: 0 0 14px; }
+  h3 { font-size: 16px; margin: 24px 0 6px; }
+  p { margin: 0 0 14px; }
+  .demo {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px; margin: 22px 0;
+  }
+  .row { display: flex; align-items: center; gap: 12px; padding: 9px 0; }
+  .row + .row { border-top: 1px solid var(--line); }
+  .who { flex: 1; min-width: 0; }
+  .who b { display: block; font-weight: 600; font-size: 15px; }
+  .who small { color: var(--muted); }
+  .tag {
+    font: 600 11px/1 ui-monospace, Consolas, monospace; letter-spacing: .05em;
+    padding: 5px 8px; border-radius: 5px; background: var(--accent); color: var(--accent-fg);
+  }
+  ul { margin: 0 0 14px; padding-left: 20px; }
+  li { margin-bottom: 7px; }
+  code { font: 13px ui-monospace, Consolas, monospace; background: var(--code); padding: 2px 5px; border-radius: 4px; }
+  pre { background: var(--code); padding: 14px; border-radius: 8px; overflow-x: auto; font: 13px/1.5 ui-monospace, Consolas, monospace; }
+  a { color: var(--accent); }
+  footer { padding: 32px 0 56px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  footer a { margin-right: 16px; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <img src="icons/icon128.png" alt="">
+      <span>Auto Language Switcher</span>
+    </div>
+
+    <h1>The right keyboard, before you start typing.</h1>
+
+    <p class="lede">
+      You keep a supplier chat in English and a family chat in Hebrew. Windows does not remember
+      which is which — so you find out you forgot only after a line of gibberish.
+    </p>
+
+    <div class="cta">
+      <a class="btn" href="#install">Install for Windows</a>
+      <a class="btn secondary" href="privacy.html">How your data is handled</a>
+    </div>
+
+    <p class="note">Free. Windows 10 and 11, Chrome and Edge. Hebrew and English.</p>
+  </header>
+
+  <section>
+    <h2>What it does</h2>
+    <p>
+      It reads which language <em>you</em> write in each conversation, and sets the layout when you
+      switch to it. Not the language of the conversation — the language of your half of it.
+    </p>
+
+    <div class="demo" aria-label="Example of three conversations and the layout chosen for each">
+      <div class="row">
+        <div class="who"><b>Supplier — Shenzhen</b><small>you write in English</small></div>
+        <span class="tag">EN</span>
+      </div>
+      <div class="row">
+        <div class="who"><b>משפחה</b><small>you write in Hebrew</small></div>
+        <span class="tag">HE</span>
+      </div>
+      <div class="row">
+        <div class="who"><b>Mixed group</b><small>too mixed to call</small></div>
+        <span class="tag" style="background:transparent;color:var(--muted);border:1px solid var(--line)">unchanged</span>
+      </div>
+    </div>
+
+    <p class="muted">
+      That last row is the point. Below 70% confidence it changes nothing. Doing nothing costs you
+      one keystroke; switching wrongly mid-sentence costs a deleted line.
+    </p>
+  </section>
+
+  <section>
+    <h2>It stays out of the way</h2>
+    <ul>
+      <li>Never switches while you are typing</li>
+      <li>Never touches a window that is not in front</li>
+      <li>Backs off for five minutes after you change the layout yourself</li>
+      <li>Pin any conversation to Hebrew or English and that beats everything</li>
+      <li>Selects the layout directly — it never cycles blindly through your languages</li>
+    </ul>
+    <p>
+      When it decides not to act, the popup says why in plain words, so it is never a mystery.
+    </p>
+  </section>
+
+  <section>
+    <h2>Nothing leaves your computer</h2>
+    <p>
+      There is no server to send anything to. No account, no telemetry, no update check — the
+      extension has no network permission at all.
+    </p>
+    <p>
+      Messages are counted in the page and discarded. What reaches the rest of the product is a
+      pair of numbers:
+    </p>
+<pre>reading  "מה נשמע אחי"
+becomes  { "Hebrew": 9 }</pre>
+    <p>
+      Conversation names are phone numbers, so they are never stored. They are hashed with a random
+      value created when you install, which makes the stored file meaningless on any other machine.
+      The agent refuses anything that is not already hashed.
+    </p>
+    <p><a href="privacy.html">The full privacy document cites the code for every claim →</a></p>
+  </section>
+
+  <section id="install">
+    <h2>Installing</h2>
+    <p>
+      Two pieces, and they are separate for a reason: a browser extension cannot change your
+      keyboard layout. Only a native program can ask Windows to do that.
+    </p>
+
+    <h3>1. The Windows agent</h3>
+    <p>
+      A 12MB download that switches the layout and remembers your preferences. Installs for your
+      user account only — no administrator rights.
+    </p>
+
+    <h3>2. The browser extension</h3>
+    <p>
+      Reads the open conversation. Requests access to <code>web.whatsapp.com</code> and nothing
+      else.
+    </p>
+
+    <p class="muted">
+      Hebrew and English must already be added as Windows keyboard layouts — the product switches
+      between layouts you have, it does not install them.
+    </p>
+
+    <p>
+      <a class="btn" href="https://github.com/">Get it on GitHub</a>
+    </p>
+    <p class="note">
+      Chrome Web Store listing pending review. Until then the extension is loaded unpacked; the
+      install guide walks through it.
+    </p>
+  </section>
+
+  <section>
+    <h2>Questions</h2>
+
+    <h3>Does it read my messages?</h3>
+    <p>
+      It counts letters by alphabet in the conversation you have open, and discards the text in the
+      same step. It never scrolls, never loads history, and never sees conversations you have not
+      opened.
+    </p>
+
+    <h3>Why does it need a program installed?</h3>
+    <p>
+      Changing a keyboard layout is a Windows operation. No browser extension can do it, on any
+      browser.
+    </p>
+
+    <h3>It picked English for a Hebrew message</h3>
+    <p>
+      If you write Hebrew in Latin letters — "ma nishma" — English is right. The question is which
+      keys you are about to press, not which language you are speaking.
+    </p>
+
+    <h3>Other languages?</h3>
+    <p>
+      Hebrew and English today. Detection works on Unicode ranges, so Russian and Arabic are a
+      small addition rather than a rewrite.
+    </p>
+
+    <h3>Other apps and sites?</h3>
+    <p>
+      WhatsApp Web today. The architecture keeps one brain in a resident program with the browser
+      as one source of signal, so desktop apps and other sites can be added without rebuilding it.
+    </p>
+  </section>
+
+  <footer>
+    <a href="privacy.html">Privacy</a>
+    <a href="https://github.com/">Source</a>
+    <p style="margin-top:14px">Free and open source. Built for people who type in two alphabets.</p>
+  </footer>
+
+</div>
+</body>
+</html>

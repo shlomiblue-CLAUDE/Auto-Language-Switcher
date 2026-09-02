@@ -58,11 +58,14 @@ public class AgentCoreTests : IDisposable
         catch (IOException) { }
     }
 
+    /// <summary>Shaped like what the content script produces: 32 lowercase hex characters.</summary>
+    private const string HashedKey = "9f2a4c8e1b3d5f7009f2a4c8e1b3d5f7";
+
     private string Signal(
         string language = "Hebrew",
         int letters = 30,
         bool composerEmpty = true,
-        string key = "conv-1",
+        string key = HashedKey,
         long? observedAt = null,
         string direction = "outgoing")
     {
@@ -173,13 +176,13 @@ public class AgentCoreTests : IDisposable
         var reply = Parse<DecisionMessage>(_core.Handle(Signal(composerEmpty: false)));
 
         Assert.Equal("UserTyping", reply.Blocker);
-        Assert.Equal(Language.Hebrew, _store.GetConversation("conv-1")!.LastReliableLanguage);
+        Assert.Equal(Language.Hebrew, _store.GetConversation(HashedKey)!.LastReliableLanguage);
     }
 
     [Fact]
     public void A_remembered_language_is_applied_on_the_next_visit()
     {
-        _store.RememberLanguage("conv-1", Language.Hebrew);
+        _store.RememberLanguage(HashedKey, Language.Hebrew);
         _layouts.Current = Language.English;
 
         // English messages, but the user has always typed Hebrew here.
@@ -197,7 +200,7 @@ public class AgentCoreTests : IDisposable
         var command = JsonSerializer.Serialize(new CommandMessage
         {
             Command = "setMode",
-            ConversationKey = "conv-1",
+            ConversationKey = HashedKey,
             Mode = "AlwaysHebrew",
         }, Wire.Json);
 
@@ -230,7 +233,7 @@ public class AgentCoreTests : IDisposable
         var command = JsonSerializer.Serialize(new CommandMessage
         {
             Command = "noteManualChange",
-            ConversationKey = "conv-1",
+            ConversationKey = HashedKey,
             LanguageTag = "en-US",
         }, Wire.Json);
 
@@ -248,11 +251,11 @@ public class AgentCoreTests : IDisposable
     [Fact]
     public void Clear_data_wipes_stored_preferences()
     {
-        _store.RememberLanguage("conv-1", Language.Hebrew);
+        _store.RememberLanguage(HashedKey, Language.Hebrew);
 
         _core.Handle(JsonSerializer.Serialize(new CommandMessage { Command = "clearData" }, Wire.Json));
 
-        Assert.Null(_store.GetConversation("conv-1"));
+        Assert.Null(_store.GetConversation(HashedKey));
     }
 
     [Fact]
@@ -269,12 +272,12 @@ public class AgentCoreTests : IDisposable
     [Fact]
     public void A_state_query_reports_what_the_popup_needs()
     {
-        _store.RememberLanguage("conv-1", Language.Hebrew);
+        _store.RememberLanguage(HashedKey, Language.Hebrew);
         _layouts.Current = Language.English;
 
         var query = JsonSerializer.Serialize(new QueryMessage
         {
-            ConversationKey = "conv-1",
+            ConversationKey = HashedKey,
             Site = "web.whatsapp.com",
         }, Wire.Json);
 

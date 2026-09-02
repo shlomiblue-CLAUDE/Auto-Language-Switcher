@@ -51,8 +51,13 @@ public sealed record ConversationPreference
     /// <summary>When the user last overrode us here. Starts the cooldown of PDR section 12.</summary>
     public DateTimeOffset? ManualOverrideAt { get; init; }
 
+    // Derived, so ignored on the wire and on disk. They were being written to conversations.json,
+    // which is harmless but misleading: a stored file should show what is remembered, not what can
+    // be recomputed from it.
+    [JsonIgnore]
     public ConversationMode PinnedMode => Mode;
 
+    [JsonIgnore]
     public Language? PinnedLanguage => Mode switch
     {
         ConversationMode.AlwaysHebrew => Language.Hebrew,
