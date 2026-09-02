@@ -1,0 +1,36 @@
+{
+  "description": "Shared normalisation corpus. Both implementations of the letter counter must agree on every case: the C# one in AutoLang.Core (the reference, used by the Agent) and the TypeScript one in the browser content script. Privacy forces the duplication - PDR section 8 requires the content script to emit counts rather than text - so this corpus is what keeps the two from drifting apart. Any change to one implementation must keep this file passing in both.",
+  "schemaNote": "counts are letters attributable to each language after URLs and emails are stripped; anything absent is zero",
+  "cases": [
+    { "id": "latin-word", "text": "shalom", "counts": { "English": 6 } },
+    { "id": "hebrew-word", "text": "שלום", "counts": { "Hebrew": 4 } },
+    { "id": "latin-sentence", "text": "hello world", "counts": { "English": 10 } },
+    { "id": "hebrew-sentence", "text": "מה נשמע", "counts": { "Hebrew": 6 } },
+    { "id": "hebrew-six-letters", "text": "אבגדהו", "counts": { "Hebrew": 6 } },
+    { "id": "proper-nouns", "text": "Tel Aviv", "counts": { "English": 7 } },
+
+    { "id": "url-only", "text": "https://example.com", "counts": {} },
+    { "id": "url-in-sentence", "text": "check https://a.com now", "counts": { "English": 8 } },
+    { "id": "www-url", "text": "www.example.com/x", "counts": {} },
+    { "id": "email", "text": "a@b.com", "counts": {} },
+    { "id": "bare-domain", "text": "google.com", "counts": {} },
+    { "id": "dotted-words-are-not-a-domain", "text": "ok.thanks", "counts": { "English": 8 } },
+
+    { "id": "digits", "text": "12345", "counts": {} },
+    { "id": "punctuation", "text": "!!!???", "counts": {} },
+    { "id": "empty", "text": "", "counts": {} },
+    { "id": "whitespace", "text": "   ", "counts": {} },
+
+    { "id": "emoji-simple", "text": "👍", "counts": {} },
+    { "id": "emoji-zwj-family", "text": "👨‍👩‍👧‍👦", "counts": {} },
+    { "id": "emoji-skin-tone", "text": "👋🏽", "counts": {} },
+    { "id": "flag-then-hebrew", "text": "🇮🇱 שלום", "counts": { "Hebrew": 4 } },
+
+    { "id": "niqqud-excluded", "text": "שָׁלוֹם", "counts": { "Hebrew": 4 } },
+    { "id": "hebrew-ligature", "text": "ﭏ", "counts": { "Hebrew": 1 } },
+    { "id": "accented-latin-partial", "text": "café", "counts": { "English": 3 } },
+
+    { "id": "mixed-scripts", "text": "שלום hello", "counts": { "Hebrew": 4, "English": 5 } },
+    { "id": "transliteration", "text": "ma nishma", "counts": { "English": 8 } }
+  ]
+}
