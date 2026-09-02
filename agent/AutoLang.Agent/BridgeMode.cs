@@ -3,23 +3,26 @@ using System.IO.Pipes;
 using System.Text.Json;
 using AutoLang.Core;
 
-namespace AutoLang.Bridge;
+namespace AutoLang.Agent;
 
 /// <summary>
-/// The native messaging host Chrome actually launches.
+/// Native messaging host mode: the role Chrome launches.
 ///
-/// It does almost nothing on purpose. Chrome spawns a fresh host process per connection and kills
-/// it when the port closes, so a host cannot hold state, cannot outlive the browser, and cannot
-/// serve a second signal source. This process therefore translates Chrome's stdio framing onto a
-/// named pipe and lets the resident Agent be the one thing that decides.
+/// This used to be a separate executable. It is the same one now, because two self-contained
+/// builds meant two copies of the .NET runtime - 211MB for a tool that switches a keyboard - and
+/// because they had to sit in the same folder for the Bridge to find the Agent, a requirement that
+/// already caused one silent failure when only one of the two files was copied.
 ///
-/// Two hard rules of this environment:
-///   - stdout carries framed messages and nothing else. One stray Console.WriteLine and Chrome
-///     kills the host with an error that names nothing useful.
-///   - Chrome passes the calling extension's origin as argv[1]. It is checked here as well as in
-///     the host manifest, so a manifest edited to widen access still meets a second gate.
+/// The role is chosen by argv, not by a flag, because Chrome's host manifest has no place to put
+/// arguments: its "path" is an executable and nothing else. Chrome and Edge both pass the calling
+/// extension's origin as an argument, so its presence is the signal - and its value is the
+/// allowlist check that has to happen anyway.
+///
+/// It still does almost nothing. Chrome spawns a fresh host process per connection and kills it
+/// when the port closes, so this process cannot hold state or outlive the browser. It translates
+/// Chrome's stdio framing onto the named pipe and lets the resident Agent decide.
 /// </summary>
-internal static class Program
+internal static class BridgeMode
 {
     private const int PipeConnectTimeoutMs = 3000;
     private const int AgentStartTimeoutMs = 10_000;
@@ -29,10 +32,19 @@ internal static class Program
         "iblcjhakhfggopgijnankilmifbjbdbp",
     ];
 
-    private static void Log(string message) =>
-        Console.Error.WriteLine($"[bridge {DateTime.Now:HH:mm:ss.fff}] {message}");
+    /// <summary>True when Chrome or Edge launched us as a native messaging host.</summary>
+    public static bool IsRequested(string[] args) =>
+        args.Any(a => a.StartsWith("chrome-extension://", StringComparison.OrdinalIgnoreCase))
+        || args.Contains("--bridge");
 
-    private static async Task<int> Main(string[] args)
+    private static void Log(string message)
+    {
+        // stderr only. stdout carries framed messages, and one stray write corrupts the stream -
+        // Chrome then kills the host with an error that names nothing useful.
+        Console.Error.WriteLine($"[bridge {DateTime.Now:HH:mm:ss.fff}] {message}");
+    }
+
+    public static async Task<int> RunAsync(string[] args)
     {
         var stdin = Console.OpenStandardInput();
         var stdout = Console.OpenStandardOutput();
@@ -54,8 +66,8 @@ internal static class Program
         catch (Exception ex) when (ex is TimeoutException or IOException)
         {
             Log($"agent unreachable: {ex.Message}");
-            // A clear code lets the extension say "the Agent is not installed" with a link, rather
-            // than failing silently and looking like the product is simply broken.
+            // A named code lets the extension say "the agent is not running" with a link, instead
+            // of failing silently and looking like the product is simply broken.
             await Fail(stdout, "AGENT_UNAVAILABLE", "The Auto Language Switcher agent is not running and could not be started.");
             return 2;
         }
@@ -78,8 +90,8 @@ internal static class Program
     }
 
     /// <summary>
-    /// Chrome passes the origin as chrome-extension://ID/. Edge passes the same shape. When run by
-    /// hand for diagnostics there is no origin argument, which is allowed - a human at a console
+    /// Checked here as well as in the host manifest, so a manifest edited to widen access still
+    /// meets a second gate. Running by hand with no origin is allowed: a human at a console
     /// already has every permission this process could grant.
     /// </summary>
     private static bool IsCallerAllowed(string[] args, out string caller)
@@ -89,7 +101,7 @@ internal static class Program
         if (caller.Length == 0)
         {
             caller = "(no origin argument)";
-            return args.Length == 0 || args.All(a => a.StartsWith("--", StringComparison.Ordinal));
+            return true;
         }
 
         var id = caller["chrome-extension://".Length..].TrimEnd('/');
@@ -98,7 +110,7 @@ internal static class Program
 
     private static async Task<NamedPipeClientStream> ConnectAsync(CancellationToken ct)
     {
-        var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+        var pipe = new NamedPipeClientStream(".", PipeServer.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
 
         try
         {
@@ -110,26 +122,25 @@ internal static class Program
             await pipe.DisposeAsync();
         }
 
-        // No Agent yet. Start it and wait, so a user who has only just installed does not have to
-        // reboot or launch anything by hand before the product works.
+        // No Agent yet. Start one, so a user who has only just installed does not have to reboot
+        // or launch anything by hand before the product works.
         Log("no agent listening; starting one");
         if (!TryStartAgent(out string reason))
             throw new IOException($"Could not start the agent: {reason}");
 
-        var retry = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+        var retry = new NamedPipeClientStream(".", PipeServer.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
         await retry.ConnectAsync(AgentStartTimeoutMs, ct);
         return retry;
     }
 
     private static bool TryStartAgent(out string reason)
     {
-        // The Agent ships beside the Bridge, so its location never has to be configured or guessed.
-        var directory = AppContext.BaseDirectory;
-        var path = Path.Combine(directory, "AutoLangAgent.exe");
+        // Our own path. One executable means there is nothing to locate and nothing to get wrong.
+        var path = Environment.ProcessPath;
 
-        if (!File.Exists(path))
+        if (path is null || !File.Exists(path))
         {
-            reason = $"AutoLangAgent.exe not found in {directory}";
+            reason = "could not determine this executable's path";
             return false;
         }
 
@@ -138,11 +149,9 @@ internal static class Program
             Process.Start(new ProcessStartInfo
             {
                 FileName = path,
-                WorkingDirectory = directory,
+                WorkingDirectory = Path.GetDirectoryName(path)!,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                RedirectStandardOutput = false,
-                RedirectStandardError = false,
             });
             reason = "";
             return true;
@@ -180,7 +189,4 @@ internal static class Program
         try { await NativeMessagingCodec.WriteAsync(stdout, JsonSerializer.Serialize(error, Wire.Json)); }
         catch (IOException) { /* the browser may already be gone */ }
     }
-
-    /// <summary>Kept in sync with PipeServer.PipeName by the round-trip test.</summary>
-    private const string PipeName = "AutoLang.Agent";
 }

@@ -19,11 +19,13 @@ public sealed class ConversationStore
 {
     private const int DebugBufferCapacity = 200;
 
+    // See JsonContexts.cs: a trimmed build has reflection-based serialisation switched off, so the
+    // resolver is what makes reading and writing these files work at all.
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() },
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        TypeInfoResolver = StoreJsonContext.Default
     };
 
     private readonly string _root;

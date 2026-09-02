@@ -18,12 +18,14 @@ public static class Wire
 {
     public const int ProtocolVersion = 1;
 
+    // TypeInfoResolver, not reflection: a trimmed build disables reflection-based serialisation
+    // entirely, and without this the Agent throws on the first message it is asked to write.
     public static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+        TypeInfoResolver = WireJsonContext.Default
     };
 
     /// <summary>Chrome's own cap on a message from an extension. Anything larger is not ours.</summary>

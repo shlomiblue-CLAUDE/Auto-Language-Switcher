@@ -1,13 +1,13 @@
 /**
  * End-to-end smoke test of the native messaging chain, without a browser.
  *
- * Spawns AutoLangBridge.exe exactly as Chrome would - framed JSON on stdin, framed JSON on stdout,
+ * Spawns AutoLang.exe exactly as Chrome would - framed JSON on stdin, framed JSON on stdout,
  * the calling extension's origin as argv[1] - and checks the reply came from a real Agent over a
  * real pipe. The unit tests cover the pieces; this covers the seams between three processes, which
  * is where native messaging actually goes wrong.
  *
  * Usage:
- *   node tools/bridge-smoke-test.mjs [path-to-AutoLangBridge.exe]
+ *   node tools/bridge-smoke-test.mjs [path-to-AutoLang.exe]
  */
 
 import { spawn } from 'node:child_process';
@@ -20,23 +20,14 @@ const repo = join(here, '..');
 
 const bridgePath =
   process.argv[2] ??
-  join(repo, 'agent/AutoLang.Bridge/bin/Debug/net8.0-windows/win-x64/AutoLangBridge.exe');
+  join(repo, 'dist/agent/AutoLang.exe');
 
 const extensionId = existsSync(join(repo, 'secrets/extension-id.txt'))
   ? readFileSync(join(repo, 'secrets/extension-id.txt'), 'utf8').trim()
   : 'iblcjhakhfggopgijnankilmifbjbdbp';
 
 if (!existsSync(bridgePath)) {
-  console.error(`Bridge not found: ${bridgePath}\nBuild it: dotnet build agent/AutoLang.Bridge`);
-  process.exit(1);
-}
-
-const agentPath = join(dirname(bridgePath), 'AutoLangAgent.exe');
-if (!existsSync(agentPath)) {
-  console.error(
-    `AutoLangAgent.exe is not beside the Bridge (${agentPath}).\n` +
-      'The Bridge starts the Agent from its own directory, so both must ship to one folder.',
-  );
+  console.error(`AutoLang.exe not found: ${bridgePath}\nBuild it: .\build.ps1`);
   process.exit(1);
 }
 

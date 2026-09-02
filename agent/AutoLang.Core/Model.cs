@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace AutoLang.Core;
 
 /// <summary>Abstracts the clock so every guard in the engine is testable without sleeping.</summary>
@@ -22,6 +24,7 @@ public enum MessageDirection
 public sealed record MessageObservation(MessageDirection Direction, MessageStats Stats, int Index);
 
 /// <summary>Per-conversation mode. A pin beats every form of analysis (PDR section 5, priority 1).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ConversationMode>))]
 public enum ConversationMode
 {
     Auto,

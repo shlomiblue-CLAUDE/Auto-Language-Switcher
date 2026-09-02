@@ -3,14 +3,13 @@
     Builds everything into dist/ in the shape it actually ships.
 
 .DESCRIPTION
-    The Agent and the Bridge MUST land in one folder. The Bridge starts the Agent from its own
-    directory, so a split layout means the extension reports AGENT_UNAVAILABLE and nothing works.
+    Produces extension\dist (load unpacked) and dist\agent (one executable, AutoLang.exe).
 
-    This script exists because hand-copying between bin folders broke exactly once, and silently:
-    AutoLangAgent.exe is a thin apphost and the real code is in AutoLangAgent.dll, so copying only
+    This script exists because hand-copying build output broke exactly once, and silently. An
+    apphost .exe is a thin launcher and the real code sits in the matching .dll, so copying only
     the .exe left an old build running. Everything looked fine - it started, it answered - it just
-    answered with the previous version's data. Publishing both projects to one folder makes that
-    class of mistake impossible.
+    answered with the previous version's data, and the popup showed a confidence threshold of zero.
+    Publishing rather than copying makes that class of mistake impossible.
 
 .PARAMETER Configuration
     Release (default) or Debug.
@@ -122,36 +121,52 @@ try {
     Invoke-Native npm @('run', 'build') 'Extension build failed.'
 } finally { Pop-Location }
 
-# --- Agent and Bridge, into ONE folder --------------------------------------------------------
+# --- Agent ------------------------------------------------------------------------------------
 
-Step 'Agent and Bridge'
+Step 'Agent'
 $agentOut = Join-Path $dist 'agent'
 
-# The Agent is resident by design - it survives the browser and starts itself on demand - so a
+# The Agent is resident by design - it outlives the browser and starts itself on demand - so a
 # rebuild will nearly always find one holding a lock on its own executable. Stopping it here is
-# not a workaround; it is the normal case.
-$running = Get-Process AutoLangAgent -ErrorAction SilentlyContinue
+# the normal case, not a workaround.
+$running = Get-Process AutoLang -ErrorAction SilentlyContinue
 if ($running) {
-    Write-Host "stopping $($running.Count) running Agent process(es)"
+    Write-Host "stopping $(@($running).Count) running Agent process(es)"
     $running | Stop-Process -Force
     Start-Sleep -Milliseconds 500
 }
 
 if (Test-Path $agentOut) { Remove-Item $agentOut -Recurse -Force }
 
-foreach ($project in 'agent\AutoLang.Agent', 'agent\AutoLang.Bridge') {
-    Invoke-Native dotnet @('publish', (Join-Path $root $project), '-c', $Configuration, '-o', $agentOut, '--nologo', '-v', 'q') "Publish failed for $project."
-}
+Invoke-Native dotnet @('publish', (Join-Path $root 'agent\AutoLang.Agent'), '-c', $Configuration, '-o', $agentOut, '--nologo', '-v', 'q') 'Publish failed.'
 
-foreach ($required in 'AutoLangAgent.exe', 'AutoLangBridge.exe') {
-    if (-not (Test-Path (Join-Path $agentOut $required))) {
-        throw "$required is missing from $agentOut. The Bridge cannot start the Agent without it."
-    }
+if (-not (Test-Path (Join-Path $agentOut 'AutoLang.exe'))) {
+    throw "AutoLang.exe is missing from $agentOut."
 }
 
 # Symbols are useful when debugging and only noise in a release folder.
 if ($Configuration -eq 'Release') {
     Get-ChildItem $agentOut -Filter *.pdb | Remove-Item -Force
+}
+
+# --- Extension package ------------------------------------------------------------------------
+
+Step 'Package'
+
+# The zip is what gets uploaded to the Chrome Web Store, and what a user loads unpacked before
+# the listing exists.
+$zipPath = Join-Path $dist 'extension.zip'
+if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+Compress-Archive -Path (Join-Path $root 'extension\dist\*') -DestinationPath $zipPath
+Write-Host "wrote $zipPath"
+
+# Inno Setup is optional. It is not fetched automatically: a build script that silently downloads
+# an installer compiler is worse than one that says what is missing.
+$iscc = Get-Command iscc -ErrorAction SilentlyContinue
+if ($iscc) {
+    Invoke-Native $iscc.Source @((Join-Path $root 'installer\AutoLang.iss')) 'Installer build failed.'
+} else {
+    Write-Host 'skipped installer (Inno Setup not installed; installer\Install.ps1 works today)'
 }
 
 # --- Summary ----------------------------------------------------------------------------------
@@ -168,8 +183,8 @@ Write-Host @"
 
 Next:
   1. Register the native host against this build:
-       .\native-host\Register-NativeHost.ps1 -BridgePath "$agentOut\AutoLangBridge.exe"
+       .\native-host\Register-NativeHost.ps1 -BridgePath "$agentOut\AutoLang.exe"
   2. chrome://extensions -> Developer mode -> Load unpacked -> extension\dist
   3. Smoke test the whole chain:
-       node tools\bridge-smoke-test.mjs "$agentOut\AutoLangBridge.exe"
+       node tools\bridge-smoke-test.mjs "$agentOut\AutoLang.exe"
 "@

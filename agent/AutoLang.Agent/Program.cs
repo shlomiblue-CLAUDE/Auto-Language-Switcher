@@ -17,6 +17,14 @@ static extern bool AttachConsole(int processId);
 
 const int AttachParentProcess = -1;
 
+// One executable, two roles. Chrome's native messaging manifest has nowhere to put arguments -
+// its "path" is an executable and nothing else - so the role cannot be selected by a flag we
+// choose. Chrome and Edge both pass the calling extension's origin, so its presence is the signal.
+if (BridgeMode.IsRequested(args))
+{
+    return await BridgeMode.RunAsync(args);
+}
+
 var verbose = args.Contains("--verbose") || args.Contains("-v");
 var layouts = new KeyboardLayoutService();
 
@@ -94,16 +102,8 @@ foreach (var language in new[] { Language.Hebrew, Language.English })
         Log($"WARNING: no {language} layout is installed. Switching to it will report {ErrorCodes.LayoutNotInstalled}.");
 }
 
-ApplicationConfiguration.Initialize();
-
-using var tray = new TrayIcon(store, layouts, () =>
-{
-    cts.Cancel();
-    Application.Exit();
-});
-
-Application.ApplicationExit += (_, _) => cts.Cancel();
-Application.Run();
+using var tray = new TrayIcon(store, layouts, () => cts.Cancel());
+tray.RunMessageLoop();
 
 try { await serverTask; }
 catch (OperationCanceledException) { }

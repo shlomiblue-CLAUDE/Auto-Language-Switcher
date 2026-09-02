@@ -7,21 +7,49 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>AutoLangAgent</AssemblyName>
+    <AssemblyName>AutoLang</AssemblyName>
     <RootNamespace>AutoLang.Agent</RootNamespace>
     <Version>0.1.0</Version>
-    <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Resources/tray.ico</ApplicationIcon>
 
-    <!-- Self-contained so users never have to install a .NET runtime. -->
+    <!-- Self-contained so users never have to install a .NET runtime.
+         Trimmed because WinForms is gone: with it, the SDK refuses to trim at all (NETSDK1175)
+         and the download was 155MB. Without it, 12.6MB. -->
     <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>true</PublishTrimmed>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+
+    <!--
+      IL2026 fires on every JsonSerializer call because the trimmer cannot statically prove the
+      types survive. They do: Wire.Json and ConversationStore both set a TypeInfoResolver from a
+      source-generated context, which is what makes serialisation work in a trimmed build at all.
+
+      Suppressed rather than tolerated because ten warnings on every build train people to stop
+      reading warnings, and the next one might matter. What the trimmer cannot prove,
+      SerializationContextTests does - it exercises every wire and stored type through the same
+      options the product uses, so a type added without its [JsonSerializable] line fails there.
+    -->
+    <NoWarn>$(NoWarn);IL2026</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- Embedded rather than copied, so a single-file publish stays a single file. -->
     <EmbeddedResource Include="Resources/tray.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Every wire DTO and stored record lives in AutoLang.Core and is serialised by reflection, which
+      the trimmer cannot see through (IL2026). Rooting the whole assembly keeps them, and it is
+      cheap: Core is about 80KB against a 12MB executable. The alternative, source-generated
+      serialisation contexts, would buy startup time this product does not need and add a second
+      place for every message type to be declared.
+
+      The smoke test is what actually proves this works - a trimmed build that serialises correctly
+      cannot be established by reading the csproj.
+    -->
+    <TrimmerRootAssembly Include="AutoLang.Core" />
   </ItemGroup>
 
   <ItemGroup>

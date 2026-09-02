@@ -8,28 +8,37 @@
     talk to it. All three have to agree or the connection fails with an error that names none of
     them, so this script writes all three from one source of truth.
 
-    Everything is per-user (HKCU). No administrator rights are needed, and nothing is written that
+    One executable serves both roles. Chrome launches AutoLang.exe as the host and passes the
+    calling extension's origin; seeing that origin is how the process knows to act as the bridge
+    rather than as the resident tray agent, and it starts a copy of itself for the agent role.
+    The host manifest has nowhere to put arguments - its "path" is an executable and nothing else -
+    which is exactly why the role is inferred rather than flagged.
+
+    Everything is per-user (HKCU). No administrator rights are needed and nothing written here
     affects other accounts on the machine.
 
-    The manifest is generated rather than committed, because it has to carry an absolute path that
+    The manifest is generated rather than committed, because it must carry an absolute path that
     is only known at install time.
 
-.PARAMETER BridgePath
-    Full path to AutoLangBridge.exe. Defaults to the debug build beside this script.
+.PARAMETER ExecutablePath
+    Full path to AutoLang.exe. Defaults to dist\agent\AutoLang.exe in this repository.
 
 .PARAMETER Uninstall
     Removes the registry entries and the generated manifest.
 
 .EXAMPLE
     .\Register-NativeHost.ps1
-    .\Register-NativeHost.ps1 -BridgePath "C:\Program Files\AutoLang\AutoLangBridge.exe"
+    .\Register-NativeHost.ps1 -ExecutablePath "$env:LOCALAPPDATA\Programs\AutoLang\AutoLang.exe"
     .\Register-NativeHost.ps1 -Uninstall
 #>
 
 [CmdletBinding()]
 param(
-    [string] $BridgePath,
+    [Alias('BridgePath')]
+    [string] $ExecutablePath,
+
     [string] $ExtensionId = 'iblcjhakhfggopgijnankilmifbjbdbp',
+
     [switch] $Uninstall
 )
 
@@ -63,39 +72,27 @@ if ($Uninstall) {
     return
 }
 
-if (-not $BridgePath) {
-    $BridgePath = Join-Path $ScriptDir '..\agent\AutoLang.Bridge\bin\Debug\net8.0-windows\win-x64\AutoLangBridge.exe'
+if (-not $ExecutablePath) {
+    $ExecutablePath = Join-Path $ScriptDir '..\dist\agent\AutoLang.exe'
 }
 
-$BridgePath = [System.IO.Path]::GetFullPath($BridgePath)
+$ExecutablePath = [System.IO.Path]::GetFullPath($ExecutablePath)
 
-if (-not (Test-Path $BridgePath)) {
+if (-not (Test-Path $ExecutablePath)) {
     Write-Error @"
-Bridge executable not found at:
-  $BridgePath
+AutoLang.exe was not found at:
+  $ExecutablePath
 
 Build it first:
-  dotnet build agent/AutoLang.Bridge
+  .\build.ps1
 "@
     return
-}
-
-# The Agent has to sit beside the Bridge; that is how the Bridge finds it without configuration.
-$AgentPath = Join-Path (Split-Path -Parent $BridgePath) 'AutoLangAgent.exe'
-if (-not (Test-Path $AgentPath)) {
-    Write-Warning @"
-AutoLangAgent.exe is not next to the Bridge at:
-  $AgentPath
-
-The Bridge starts the Agent from its own directory. Without it, the extension will report
-AGENT_UNAVAILABLE. Copy the Agent build beside the Bridge, or publish both to one folder.
-"@
 }
 
 $manifest = [ordered]@{
     name            = $HostName
     description     = 'Auto Language Switcher native bridge'
-    path            = $BridgePath
+    path            = $ExecutablePath
     type            = 'stdio'
     allowed_origins = @("chrome-extension://$ExtensionId/")
 }
@@ -103,14 +100,14 @@ $manifest = [ordered]@{
 New-Item -ItemType Directory -Force (Split-Path -Parent $ManifestPath) | Out-Null
 $manifest | ConvertTo-Json -Depth 4 | Out-File -FilePath $ManifestPath -Encoding utf8 -Force
 
-Write-Host "manifest $ManifestPath"
-Write-Host "bridge   $BridgePath"
-Write-Host "origin   chrome-extension://$ExtensionId/`n"
+Write-Host "manifest   $ManifestPath"
+Write-Host "executable $ExecutablePath"
+Write-Host "origin     chrome-extension://$ExtensionId/`n"
 
 foreach ($path in $RegistryPaths) {
     New-Item -Path $path -Force | Out-Null
     Set-ItemProperty -Path $path -Name '(Default)' -Value $ManifestPath
-    Write-Host "wrote    $path"
+    Write-Host "wrote      $path"
 }
 
 Write-Host @"
