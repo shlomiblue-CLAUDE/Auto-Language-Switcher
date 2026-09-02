@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Auto Language Switcher",
+  "version": "0.1.0",
+  "description": "Switches your Windows keyboard layout to the language you are about to type in. All analysis happens on your computer.",
+  "minimum_chrome_version": "110",
+
+  "permissions": ["storage", "nativeMessaging"],
+
+  "host_permissions": ["https://web.whatsapp.com/*"],
+
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "action": {
+    "default_title": "Auto Language Switcher",
+    "default_popup": "popup.html"
+  }
+}

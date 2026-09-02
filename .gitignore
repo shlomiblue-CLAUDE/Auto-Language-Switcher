@@ -5,3 +5,4 @@ dist/
 *.user
 spike/matrix-*.txt
 spike/matrix-*.err
+extension/dist/
