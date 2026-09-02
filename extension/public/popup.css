@@ -1,0 +1,139 @@
+/*
+ * Deliberately plain. A popup that opens for two seconds while the user is mid-conversation
+ * should answer "what is it doing and why" and get out of the way.
+ *
+ * Colours are set for both schemes because Chrome popups follow the OS theme, and contrast ratios
+ * are kept at or above 4.5:1 in each - PDR section 13 asks for that and it is the difference
+ * between readable and decorative.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --bg: #ffffff;
+  --fg: #1a1a1c;
+  --muted: #55555c;
+  --line: #e2e2e8;
+  --panel: #f7f7fa;
+  --accent: #4f46e5;
+  --accent-fg: #ffffff;
+  --warn-bg: #fff4e5;
+  --warn-line: #f0b429;
+  --warn-fg: #6b4a00;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1b1f;
+    --fg: #ececf0;
+    --muted: #a6a6b0;
+    --line: #33333a;
+    --panel: #242429;
+    --accent: #8b83f5;
+    --accent-fg: #14141a;
+    --warn-bg: #3a2e12;
+    --warn-line: #b98a1e;
+    --warn-fg: #ffe0a3;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  width: 300px;
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+#app { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+.head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.head h1 { font-size: 13px; font-weight: 600; margin: 0; }
+
+.badge {
+  font: 600 11px/1 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  letter-spacing: .04em;
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  white-space: nowrap;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.panel h2 { font-size: 12px; font-weight: 600; margin: 0 0 8px; }
+
+.panel-warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-line);
+  color: var(--warn-fg);
+}
+
+.panel-warn p { margin: 0 0 6px; }
+.panel-warn p:last-child { margin-bottom: 0; }
+
+.detail {
+  font: 11px/1.4 ui-monospace, Consolas, monospace;
+  opacity: .85;
+  word-break: break-word;
+}
+
+.rows { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.row dt { color: var(--muted); flex: 0 0 auto; }
+.row dd { margin: 0; text-align: right; font-weight: 500; }
+
+.modes { display: flex; gap: 6px; }
+
+button {
+  font: inherit;
+  font-weight: 500;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+button:hover { border-color: var(--accent); }
+
+/* Never remove the focus ring: every control here has to be reachable by keyboard alone. */
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.mode { flex: 1; }
+
+/* aria-pressed is the state, so it drives the styling too - the two cannot drift apart. */
+button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+}
+
+button[disabled] { opacity: .5; cursor: not-allowed; }
+
+.wide { width: 100%; }
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.privacy { margin: 0; font-size: 11px; color: var(--muted); flex: 1; }
+
+.foot a { font-size: 11px; color: var(--accent); }

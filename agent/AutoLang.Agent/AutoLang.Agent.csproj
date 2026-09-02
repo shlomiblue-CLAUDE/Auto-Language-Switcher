@@ -1,18 +1,31 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!-- WinExe, not Exe: starting the Agent must not flash a console window at the user.
+         The layouts and status diagnostic flags reattach to the parent console instead. -->
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AutoLangAgent</AssemblyName>
     <RootNamespace>AutoLang.Agent</RootNamespace>
     <Version>0.1.0</Version>
-    <!-- Shipping self-contained so users never install a .NET runtime. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Resources/tray.ico</ApplicationIcon>
+
+    <!-- Self-contained so users never have to install a .NET runtime. -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Embedded rather than copied, so a single-file publish stays a single file. -->
+    <EmbeddedResource Include="Resources/tray.ico" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\AutoLang.Core\AutoLang.Core.csproj" />
   </ItemGroup>
+
 </Project>

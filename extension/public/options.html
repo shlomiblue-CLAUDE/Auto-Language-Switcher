@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Auto Language Switcher — Settings</title>
+  <link rel="stylesheet" href="popup.css">
+  <style>
+    body { width: auto; max-width: 640px; margin: 0 auto; padding: 24px 16px; }
+    #app { padding: 0; gap: 16px; }
+    .head h1 { font-size: 18px; }
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .field:last-child { margin-bottom: 0; }
+    .field label { font-weight: 500; }
+    .field .hint { font-size: 12px; color: var(--muted); margin: 0; }
+    select, input[type="range"] { font: inherit; }
+    select {
+      padding: 6px 8px; border-radius: 6px;
+      border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+    }
+    .inline { flex-direction: row; align-items: center; gap: 10px; }
+    .range-row { display: flex; align-items: center; gap: 10px; }
+    .range-row input { flex: 1; }
+    output { font: 600 13px ui-monospace, Consolas, monospace; min-width: 3.5em; text-align: right; }
+    .danger { border-color: #d14343; color: #d14343; }
+    .danger:hover { border-color: #d14343; background: #d14343; color: #fff; }
+    .saved { font-size: 12px; color: var(--muted); min-height: 1.2em; }
+  </style>
+</head>
+<body>
+  <main id="app">
+    <header class="head">
+      <h1>Auto Language Switcher</h1>
+      <span id="layout-badge" class="badge">…</span>
+    </header>
+
+    <section id="agent-missing" class="panel panel-warn" hidden>
+      <h2>The desktop agent is not running</h2>
+      <p>Settings are stored by the Windows agent, so they cannot be changed until it is running.</p>
+      <p class="detail"><span id="agent-error"></span></p>
+    </section>
+
+    <section class="panel">
+      <h2>Switching</h2>
+
+      <div class="field inline">
+        <input type="checkbox" id="enabled">
+        <label for="enabled">Switch my keyboard automatically</label>
+      </div>
+
+      <div class="field">
+        <label for="default-language">Default language</label>
+        <select id="default-language">
+          <option value="unknown">Leave the keyboard alone</option>
+          <option value="he-IL">Hebrew</option>
+          <option value="en-US">English</option>
+        </select>
+        <p class="hint">
+          Used only when a conversation offers no evidence at all — no messages of your own, and
+          nothing remembered.
+        </p>
+      </div>
+
+      <div class="field">
+        <label for="threshold">Confidence needed to switch</label>
+        <div class="range-row">
+          <input type="range" id="threshold" min="50" max="95" step="5" value="70">
+          <output id="threshold-value" for="threshold">70%</output>
+        </div>
+        <p class="hint">
+          Higher means the product switches less often and is wrong less often. Below this, it
+          leaves your keyboard alone rather than guessing.
+        </p>
+      </div>
+
+      <div class="field inline">
+        <input type="checkbox" id="show-indicator">
+        <label for="show-indicator">Show the language on the toolbar icon</label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Your data</h2>
+      <p class="hint" style="margin-bottom: 10px">
+        Everything is stored on this computer: which language you use per conversation, and nothing
+        else. Conversation names are hashed with a random value created when you installed, so the
+        stored file is meaningless on any other machine. No message text is ever written down.
+      </p>
+      <button type="button" id="clear-data" class="danger">Clear all stored preferences</button>
+      <p class="saved" id="clear-status" role="status"></p>
+    </section>
+
+    <section class="panel">
+      <h2>Diagnostics</h2>
+      <dl class="rows">
+        <div class="row"><dt>Agent version</dt><dd id="agent-version">—</dd></div>
+        <div class="row"><dt>Current layout</dt><dd id="current-layout">—</dd></div>
+        <div class="row"><dt>Layouts installed in Windows</dt><dd id="available-layouts">—</dd></div>
+      </dl>
+    </section>
+
+    <footer class="foot">
+      <p class="privacy">Messages are analysed locally and are never sent anywhere.</p>
+      <p class="saved" id="save-status" role="status"></p>
+    </footer>
+  </main>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>

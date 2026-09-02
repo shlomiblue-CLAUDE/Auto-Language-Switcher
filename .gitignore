@@ -8,3 +8,4 @@ spike/matrix-*.err
 extension/dist/
 secrets/
 native-host/manifests/*.json
+dist/

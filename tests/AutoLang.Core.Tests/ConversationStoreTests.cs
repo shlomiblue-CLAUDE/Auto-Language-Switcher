@@ -35,6 +35,33 @@ public class ConversationStoreTests : IDisposable
     }
 
     [Fact]
+    public void Defaults_are_the_values_the_document_specifies()
+    {
+        // Asserting the literal numbers, not Settings.Default against itself. The comparison-to-
+        // itself version of this test passes even when every default is wrong, which is exactly
+        // how a threshold of 0 reached the popup unnoticed.
+        var settings = _store.Settings;
+
+        Assert.True(settings.Enabled);
+        Assert.Equal(0.70, settings.ConfidenceThreshold);
+        Assert.True(settings.ShowIndicator);
+        Assert.Equal(Language.Unknown, settings.DefaultLanguage);
+        Assert.Equal(TimeSpan.FromMilliseconds(750), settings.HysteresisWindow);
+    }
+
+    [Fact]
+    public void Defaults_survive_a_save_and_reload()
+    {
+        _store.SaveSettings(_store.Settings);
+
+        var reloaded = Reopen().Settings;
+
+        Assert.Equal(0.70, reloaded.ConfidenceThreshold);
+        Assert.True(reloaded.ShowIndicator);
+        Assert.Equal(TimeSpan.FromMilliseconds(750), reloaded.HysteresisWindow);
+    }
+
+    [Fact]
     public void A_remembered_language_survives_a_restart()
     {
         _store.RememberLanguage("conv-1", Language.Hebrew);

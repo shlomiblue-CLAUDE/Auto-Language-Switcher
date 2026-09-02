@@ -187,6 +187,32 @@ public sealed class AgentCore
                     _store.SaveSettings(_store.Settings with { Enabled = enabled });
                     break;
 
+                case "setSettings":
+                {
+                    // Applied as one write. A threshold saved without its language, or the reverse,
+                    // would leave the product in a state the user never chose.
+                    var settings = _store.Settings;
+
+                    if (command.Enabled is { } isEnabled)
+                        settings = settings with { Enabled = isEnabled };
+
+                    if (command.DefaultLanguage is { } tag)
+                        settings = settings with { DefaultLanguage = LanguageExtensions.FromTag(tag) };
+
+                    if (command.ConfidenceThreshold is { } threshold)
+                    {
+                        // Clamped rather than rejected. A slider cannot send nonsense, but a
+                        // hand-written message could, and a threshold of 0 would switch on noise.
+                        settings = settings with { ConfidenceThreshold = Math.Clamp(threshold, 0.5, 0.95) };
+                    }
+
+                    if (command.ShowIndicator is { } showIndicator)
+                        settings = settings with { ShowIndicator = showIndicator };
+
+                    _store.SaveSettings(settings);
+                    break;
+                }
+
                 case "noteManualChange" when command.ConversationKey is { } manualKey:
                 {
                     // The user overrode us. Record it, start the cooldown, and reset hysteresis so
@@ -225,6 +251,9 @@ public sealed class AgentCore
                 RememberedLanguage = (preference?.LastReliableLanguage ?? Language.Unknown).ToTag(),
                 SitePaused = site?.Paused ?? false,
                 AvailableLayouts = _layouts.AvailableLanguages().Select(l => l.ToTag()).ToList(),
+                DefaultLanguage = _store.Settings.DefaultLanguage.ToTag(),
+                ConfidenceThreshold = _store.Settings.ConfidenceThreshold,
+                ShowIndicator = _store.Settings.ShowIndicator,
                 LastDecision = _lastDecision,
             });
         }

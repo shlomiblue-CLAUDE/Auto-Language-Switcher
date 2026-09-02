@@ -65,6 +65,8 @@ class AgentConnection {
         this.lastError = null;
         this.lastReply = reply;
 
+        reflect(reply);
+
         if (reply?.type === 'error') {
           // An error from the Agent is a reply, not a transport failure. Surfacing the code is
           // what lets the popup say "Windows has no Hebrew layout installed" rather than
@@ -81,6 +83,8 @@ class AgentConnection {
         this.port = null;
         this.lastError = reason;
         this.failures += 1;
+
+        setBadge('!', 'the desktop agent is not running');
 
         const backoff = RECONNECT_BACKOFF_MS[Math.min(this.failures, RECONNECT_BACKOFF_MS.length - 1)]!;
         this.nextAttemptAt = Date.now() + backoff;
@@ -159,6 +163,56 @@ function warmUp(): void {
 
 chrome.runtime.onStartup.addListener(warmUp);
 chrome.runtime.onInstalled.addListener(warmUp);
+
+/**
+ * PDR section 6 asks the toolbar icon to read HE, EN, AUTO or PAUSE.
+ *
+ * A badge carries that instead of four icon variants: it is one line of code rather than a dozen
+ * generated images, it stays legible at any zoom, and screen readers pick it up through the title.
+ * The title always spells out the state in full, since four characters cannot.
+ */
+const BADGE_COLOURS: Record<string, string> = {
+  HE: '#4f46e5',
+  EN: '#4f46e5',
+  AUTO: '#6b7280',
+  OFF: '#9ca3af',
+  '!': '#d14343',
+};
+
+function setBadge(text: string, title: string): void {
+  void chrome.action.setBadgeText({ text });
+  void chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOURS[text] ?? '#6b7280' });
+  void chrome.action.setTitle({ title: `Auto Language Switcher — ${title}` });
+}
+
+function reflect(reply: AgentReply): void {
+  if (reply.type === 'error') {
+    setBadge('!', `error: ${reply.code ?? 'unknown'}`);
+    return;
+  }
+
+  if (reply.type === 'state' && reply.enabled === false) {
+    setBadge('OFF', 'switching is turned off');
+    return;
+  }
+
+  const layout = String(reply.currentLayout ?? 'unknown');
+  const short = layout === 'he-IL' ? 'HE' : layout === 'en-US' ? 'EN' : 'AUTO';
+
+  if (reply.type === 'decision') {
+    const outcome = String(reply.outcome ?? '');
+    if (outcome === 'Suppressed') {
+      setBadge('AUTO', `no change: ${String(reply.blocker ?? 'unknown')}`);
+      return;
+    }
+    const language = String(reply.language ?? 'unknown');
+    const applied = language === 'he-IL' ? 'HE' : language === 'en-US' ? 'EN' : 'AUTO';
+    setBadge(applied, reply.applied ? `switched to ${language}` : `could not switch (${reply.errorCode ?? 'failed'})`);
+    return;
+  }
+
+  setBadge(short, `current layout ${layout}`);
+}
 
 chrome.runtime.onMessage.addListener((message: OutboundMessage, _sender, sendResponse) => {
   if (!message || typeof message !== 'object') return false;

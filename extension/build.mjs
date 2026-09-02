@@ -9,6 +9,8 @@ const outdir = 'dist';
 const targets = [
   { entry: 'src/content/index.ts', out: `${outdir}/content.js`, format: 'iife' },
   { entry: 'src/background/service-worker.ts', out: `${outdir}/background.js`, format: 'esm' },
+  { entry: 'src/popup/index.ts', out: `${outdir}/popup.js`, format: 'esm' },
+  { entry: 'src/options/index.ts', out: `${outdir}/options.js`, format: 'esm' },
 ];
 
 await rm(outdir, { recursive: true, force: true });

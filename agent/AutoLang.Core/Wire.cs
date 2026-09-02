@@ -122,6 +122,11 @@ public sealed class CommandMessage
     [JsonPropertyName("mode")] public string? Mode { get; set; }
     [JsonPropertyName("language")] public string? LanguageTag { get; set; }
     [JsonPropertyName("enabled")] public bool? Enabled { get; set; }
+
+    // Settings, sent together by the options page so a half-applied change cannot exist.
+    [JsonPropertyName("defaultLanguage")] public string? DefaultLanguage { get; set; }
+    [JsonPropertyName("confidenceThreshold")] public double? ConfidenceThreshold { get; set; }
+    [JsonPropertyName("showIndicator")] public bool? ShowIndicator { get; set; }
 }
 
 public sealed class QueryMessage
@@ -158,6 +163,9 @@ public sealed class StateMessage
     [JsonPropertyName("rememberedLanguage")] public string RememberedLanguage { get; set; } = "unknown";
     [JsonPropertyName("sitePaused")] public bool SitePaused { get; set; }
     [JsonPropertyName("availableLayouts")] public List<string> AvailableLayouts { get; set; } = [];
+    [JsonPropertyName("defaultLanguage")] public string DefaultLanguage { get; set; } = "unknown";
+    [JsonPropertyName("confidenceThreshold")] public double ConfidenceThreshold { get; set; }
+    [JsonPropertyName("showIndicator")] public bool ShowIndicator { get; set; }
     [JsonPropertyName("lastDecision")] public DecisionMessage? LastDecision { get; set; }
 }
 

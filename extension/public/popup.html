@@ -1,10 +1,72 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>Auto Language Switcher</title>
-<style>
-  body { font: 14px system-ui, sans-serif; margin: 0; padding: 14px; width: 260px; }
-  .placeholder { color: #666; }
-</style>
-<h1 style="font-size:15px;margin:0 0 8px">Auto Language Switcher</h1>
-<p class="placeholder">Controls arrive in phase 5.</p>
-<p style="font-size:12px;color:#555">Messages are analysed locally and are never sent anywhere.</p>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Auto Language Switcher</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main id="app">
+    <header class="head">
+      <h1>Auto Language Switcher</h1>
+      <span id="layout-badge" class="badge" aria-live="polite">…</span>
+    </header>
+
+    <!-- Shown when the Agent cannot be reached. Without this the product would simply do
+         nothing, which is indistinguishable from being broken. -->
+    <section id="agent-missing" class="panel panel-warn" hidden>
+      <h2>The desktop agent is not running</h2>
+      <p>
+        The extension reads conversations, but only the Windows agent can change your keyboard
+        layout. Install or start it, then reopen this popup.
+      </p>
+      <p class="detail"><span id="agent-error"></span></p>
+    </section>
+
+    <section id="adapter-broken" class="panel panel-warn" hidden>
+      <h2>WhatsApp layout not recognized</h2>
+      <p>
+        WhatsApp changed its page structure, so the extension has stopped making decisions here
+        rather than guess. Nothing will be switched until it is updated.
+      </p>
+    </section>
+
+    <section id="status" class="panel" hidden>
+      <dl class="rows">
+        <div class="row">
+          <dt>This conversation</dt>
+          <dd id="conversation-language">—</dd>
+        </div>
+        <div class="row">
+          <dt>Confidence</dt>
+          <dd id="confidence">—</dd>
+        </div>
+        <div class="row">
+          <dt>Reason</dt>
+          <dd id="reason">—</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="panel" aria-labelledby="mode-label">
+      <h2 id="mode-label">Language for this conversation</h2>
+      <div class="modes" role="group" aria-labelledby="mode-label">
+        <button type="button" class="mode" data-mode="Auto" aria-pressed="false">Auto</button>
+        <button type="button" class="mode" data-mode="AlwaysHebrew" aria-pressed="false" lang="he">עברית</button>
+        <button type="button" class="mode" data-mode="AlwaysEnglish" aria-pressed="false">English</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <button type="button" id="pause-site" class="wide" aria-pressed="false">Pause on this site</button>
+    </section>
+
+    <footer class="foot">
+      <p class="privacy">Messages are analysed locally and are never sent anywhere.</p>
+      <a href="options.html" target="_blank" rel="noopener">Settings</a>
+    </footer>
+  </main>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
