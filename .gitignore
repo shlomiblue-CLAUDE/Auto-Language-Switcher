@@ -6,3 +6,5 @@ dist/
 spike/matrix-*.txt
 spike/matrix-*.err
 extension/dist/
+secrets/
+native-host/manifests/*.json

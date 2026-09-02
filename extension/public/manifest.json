@@ -4,24 +4,29 @@
   "version": "0.1.0",
   "description": "Switches your Windows keyboard layout to the language you are about to type in. All analysis happens on your computer.",
   "minimum_chrome_version": "110",
-
-  "permissions": ["storage", "nativeMessaging"],
-
-  "host_permissions": ["https://web.whatsapp.com/*"],
-
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1KFtysD6G7EXH14kxXkFdS0Oi4P64IUjERV7pzZfsv77jHNGCr0956A5oVhmgEP2qfiJIEZwb3MGdzsJ5oA0xXBLQmwjFBrq/svs938T7446hzFg2m1+q3KM6YWJwR7fmywtAUrSvEDDt3YQcxL4MUqpp2lgoMwxFsyU2y5R9FmZ/QaZe7oWf2mzr60ahk+YSPSic4ojjkPNelZxdPS6Vnoj10wnRf0gN0cKADtMX6Z/YQi0rXFjVwkb3T3ceFra/oMYWqKtgf7m54WmsP3OjofYJgy8pzUGDOEv/n89sFA+So9y+kFttRcmtWEru5YTqZMdptFxPHk7pDe1A8ScXwIDAQAB",
+  "permissions": [
+    "storage",
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "https://web.whatsapp.com/*"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
-
   "content_scripts": [
     {
-      "matches": ["https://web.whatsapp.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
-
   "action": {
     "default_title": "Auto Language Switcher",
     "default_popup": "popup.html"
