@@ -150,6 +150,39 @@ produced them at 11–21ms each.
 The lesson is the one `tools/verify-registration.ps1` exists for: a file read is not evidence unless
 you know which process's view you are reading.
 
+### What the first run found
+
+Two defects, both reported by the user as one symptom: it started well, got worse, and clearing the
+store fixed it. Neither was visible to any automated test, and neither would have been found without
+the log.
+
+**The all-messages fallback was written to memory.** Incoming messages are the other person's
+language — a hint worth acting on once, and never worth recording, because memory outranks the
+user's own messages on every later visit. A conversation where the other person writes Hebrew and
+the user answers in English learned Hebrew once and answered Hebrew forever.
+
+**The typing guard learned from the product's own output.** It records the layout in use while the
+user types, which is sound, but it did not ask where that layout came from. After an automatic
+switch the layout in use is the last guess; the moment the user began typing, that guess was written
+back as the conversation's language. One wrong switch became permanent. A log showed one
+conversation's memory flipping Hebrew, English, Hebrew inside thirty seconds along this path.
+
+The instrument mattered as much as the fixes. The log recorded applied switches and nothing else, so
+a session with four conversation changes and no switches produced no lines at all — suppressed,
+already-correct, and no-decision were indistinguishable from silence. It now records every decision
+with the evidence behind it, split by who wrote the messages, which is what separated "genuinely
+mixed conversation" from "direction detection failed" in one reading.
+
+### The second run
+
+Clean. No flip-flop: one conversation held its language across ten consecutive reads where it
+previously oscillated within seconds. Two switches two seconds apart turned out to be two different
+conversations, which is correct. Switches at 11–19ms from three different evidence sources, no
+failed switch, no hysteresis block.
+
+Not observed on this run: CPU and memory under load, and the alt-tab check that another window's
+layout is left alone. Those rows are still open.
+
 ---
 
 ## Manual D — Edge in the foreground ✅ done 2026-09-03
@@ -186,7 +219,7 @@ Fill in when run. An empty row is more useful than an assumed one.
 | Bridge smoke test (5) | 2026-09-03 | PASS | Against the installed build |
 | Manual A — selectors | 2026-09-03 | FAIL, then PASS | Direction was dead; adapter v2.0.0 resolves 19/19 live, 0 disagreements |
 | Manual B — network | 2026-09-03 | PASS | Zero requests in the service worker Network panel across several conversation switches. On disk: 3 files, no message text, the one stored key is 32 hex characters |
-| Manual C — 30 switches | | | Partial evidence already: 6 conversations learned, switches at 11–21ms, confidence 1.00 |
+| Manual C — 30 switches | 2026-09-03 | FAIL, then PASS | Found two real defects. After both: no flip-flop across a session, switches 11–19ms, three evidence sources, zero failed switches. CPU and memory not observed |
 | Manual D — Edge foreground | 2026-09-03 | PASS | 7/8, 15–25ms; real switch applied by the shipped binary |
 
 ---
