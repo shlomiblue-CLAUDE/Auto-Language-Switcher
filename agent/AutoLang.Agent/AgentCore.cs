@@ -33,7 +33,6 @@ public sealed class AgentCore
 
     /// <summary>Diagnostic only, and reset with the process. Salted hashes, never raw identifiers.</summary>
     private readonly HashSet<string> _conversationKeysSeen = [];
-    private string? _lastConversationKey;
     private readonly object _gate = new();
 
     private DecisionMessage? _lastDecision;
@@ -134,21 +133,6 @@ public sealed class AgentCore
             });
         }
 
-        // Identity churn, measured rather than inferred.
-        //
-        // Thirty switches between two conversations produced fourteen stored keys, which means the
-        // same chat is being handed a new identity on most visits and every preference learned for
-        // it is orphaned at once. Counting distinct keys against the number of conversations the
-        // user actually opened is the cheapest way to see that happening live, and the eight-
-        // character prefix of an already-salted hash identifies nothing.
-        if (signal.ConversationKey != _lastConversationKey)
-        {
-            var seenBefore = !_conversationKeysSeen.Add(signal.ConversationKey);
-            _log($"conversation {signal.ConversationKey[..8]} ({(seenBefore ? "known" : "new")}), " +
-                 $"{_conversationKeysSeen.Count} distinct this session");
-            _lastConversationKey = signal.ConversationKey;
-        }
-
         var observedAt = DateTimeOffset.FromUnixTimeMilliseconds(signal.ObservedAt);
         var now = _clock.Now;
 
@@ -196,10 +180,70 @@ public sealed class AgentCore
                     : $"switch to {decision.Language} failed: {result.ErrorCode}");
             }
 
+            LogDecision(signal, request, decision, preference);
+
             var message = ToMessage(signal.ConversationKey, decision, applied, errorCode);
             _lastDecision = message;
             return Serialize(message);
         }
+    }
+
+    /// <summary>
+    /// Every decision, not only the ones that changed something.
+    ///
+    /// The log used to record applied switches and nothing else, which made the common complaint -
+    /// "it did not switch" - undiagnosable: a suppressed decision, a decision that found the layout
+    /// already correct, and a signal that never produced a decision all looked identical, namely
+    /// like silence. One user session showed four conversation switches and not one log line.
+    ///
+    /// So this prints what was decided and everything the decision turned on: the blocker, the
+    /// evidence it used, what memory held for this conversation, and the three pieces of Windows
+    /// state the engine reads. Note especially <c>memory=</c> - the earlier "new conversation"
+    /// line meant "not seen by this process yet" and was read, including by me, as "nothing stored
+    /// for it", which are different things and misled the first diagnosis.
+    ///
+    /// Verbose only. The conversation key is already a salted hash and is truncated further.
+    /// </summary>
+    private void LogDecision(
+        SignalMessage signal,
+        DecisionRequest request,
+        Decision decision,
+        ConversationPreference? preference)
+    {
+        _conversationKeysSeen.Add(signal.ConversationKey);
+
+        var memory = preference?.LastReliableLanguage is { } remembered && remembered != Language.Unknown
+            ? remembered.ToString()
+            : "none";
+
+        var pin = preference?.PinnedLanguage is { } pinned ? $" pin={pinned}" : "";
+        var blocker = decision.Blocker != DecisionBlocker.None ? $" blocker={decision.Blocker}" : "";
+
+        // The evidence itself, because "nine messages and no decision" has two very different
+        // causes and the count alone cannot tell them apart. Either the conversation really is
+        // mixed, or direction detection has failed and every message landed in the wrong bucket -
+        // in which case the user's own messages are an empty set and only the weak fallback is
+        // left, needing a margin it will rarely reach.
+        //
+        // These are letter counts, which is what the content script sends and all it sends. They
+        // cannot reconstruct a word, let alone a message.
+        var outgoing = request.Messages.Where(m => m.Direction == MessageDirection.Outgoing).ToList();
+        var incoming = request.Messages.Where(m => m.Direction == MessageDirection.Incoming).ToList();
+
+        static string Letters(IEnumerable<MessageObservation> messages)
+        {
+            var list = messages.ToList();
+            return $"he={list.Sum(m => m.Stats.Of(Language.Hebrew))} en={list.Sum(m => m.Stats.Of(Language.English))}";
+        }
+
+        _log(
+            $"decision {signal.ConversationKey[..8]}: {decision.Outcome}{blocker} " +
+            $"lang={decision.Language} src={decision.Source} conf={decision.Confidence:F2} " +
+            $"| memory={memory}{pin} layout={request.CurrentLayout} " +
+            $"composer={(request.ComposerEmpty ? "empty" : "typing")} " +
+            $"foreground={(request.BrowserIsForeground ? "yes" : "no")} " +
+            $"| mine={outgoing.Count}[{Letters(outgoing)}] theirs={incoming.Count}[{Letters(incoming)}] " +
+            $"keys={_conversationKeysSeen.Count}");
     }
 
     private string? HandleHealth(HealthMessage health)

@@ -417,6 +417,37 @@ public class DecisionEngineTests
     }
 
     [Fact]
+    public void A_suppressed_decision_still_says_what_it_looked_at()
+    {
+        // "Read nine messages and could not choose" and "saw nothing at all" are different answers
+        // to the user, and to anyone debugging. Dropping the source and confidence on the way out
+        // collapsed them into one: the popup and the log both reported source None at confidence
+        // zero for a conversation that had been read in full.
+        var mixed = new MessageObservation(
+            MessageDirection.Outgoing,
+            MessageStats.From((Language.Hebrew, 50), (Language.English, 50)),
+            0);
+
+        var decision = Decide(Request([mixed], currentLayout: Language.English));
+
+        Assert.Equal(DecisionOutcome.Suppressed, decision.Outcome);
+        Assert.Equal(DecisionBlocker.LowConfidence, decision.Blocker);
+        Assert.Equal(DecisionSource.OutgoingMessages, decision.Source);
+    }
+
+    [Fact]
+    public void A_conversation_with_nothing_in_it_is_reported_as_having_nothing_in_it()
+    {
+        // The other side of the same line: no messages must still report NoSignal, or the
+        // distinction the test above exists to preserve is worthless.
+        var decision = Decide(Request([], currentLayout: Language.English));
+
+        Assert.Equal(DecisionOutcome.Suppressed, decision.Outcome);
+        Assert.Equal(DecisionBlocker.NoSignal, decision.Blocker);
+        Assert.Equal(DecisionSource.None, decision.Source);
+    }
+
+    [Fact]
     public void The_global_default_applies_only_when_nothing_else_says_anything()
     {
         var settings = Settings.Default with { DefaultLanguage = Language.Hebrew };

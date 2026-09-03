@@ -69,7 +69,17 @@ public sealed class DecisionEngine
             return Suppressed(DecisionBlocker.ManualCooldown);
 
         if (language == Language.Unknown)
-            return Suppressed(source == DecisionSource.None ? DecisionBlocker.NoSignal : DecisionBlocker.LowConfidence);
+        {
+            // Carrying the source and confidence through matters. Without them a suppressed
+            // decision reports source None at confidence zero, which reads as "nothing was
+            // observed" when what actually happened is "nine messages were read and they did not
+            // agree". The popup shows this to the user as the reason, and the log showed it to me
+            // while I was diagnosing exactly that case.
+            return Suppressed(
+                source == DecisionSource.None ? DecisionBlocker.NoSignal : DecisionBlocker.LowConfidence,
+                source,
+                confidence);
+        }
 
         if (language == request.CurrentLayout)
         {
@@ -189,8 +199,17 @@ public sealed class DecisionEngine
     private static Language LearnedFrom(DecisionSource source, Language language) =>
         source is DecisionSource.OutgoingMessages ? language : Language.Unknown;
 
-    private static Decision Suppressed(DecisionBlocker blocker) =>
-        new() { Outcome = DecisionOutcome.Suppressed, Blocker = blocker };
+    private static Decision Suppressed(
+        DecisionBlocker blocker,
+        DecisionSource source = DecisionSource.None,
+        double confidence = 0) =>
+        new()
+        {
+            Outcome = DecisionOutcome.Suppressed,
+            Blocker = blocker,
+            Source = source,
+            Confidence = confidence,
+        };
 
     /// <summary>
     /// Records that the user changed the layout themselves. Resets hysteresis, so the product
