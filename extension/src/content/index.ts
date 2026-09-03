@@ -24,7 +24,20 @@ const DEBOUNCE_MS = 100; // PDR section 12
 const MAX_MESSAGES = 10; // PDR section 5
 const HEALTH_INTERVAL_MS = 30_000;
 
-class ContentObserver {
+/**
+ * True when the extension was reloaded out from under this page.
+ *
+ * Chrome leaves the old content script running in every page it was injected into, but severs its
+ * `chrome.*` connection. Every call then throws, and there is no way back: this script instance is
+ * orphaned until the page reloads. Ordinary during development, and it happens to users on every
+ * extension update.
+ */
+export function isContextInvalidated(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Extension context (?:invalidated|was invalidated)/i.test(message);
+}
+
+export class ContentObserver {
   private readonly adapter: SiteAdapter;
   private observer: MutationObserver | null = null;
   private observedRoot: Element | null = null;
@@ -33,6 +46,9 @@ class ContentObserver {
   private lastConversationKey: string | null = null;
   private lastHealthSent = 0;
   private lastHealthy: boolean | null = null;
+
+  /** Set once the extension is reloaded. There is no recovery, so it is never cleared. */
+  private orphaned = false;
 
   constructor(adapter: SiteAdapter) {
     this.adapter = adapter;
@@ -83,12 +99,41 @@ class ContentObserver {
   }
 
   private schedule(): void {
+    if (this.orphaned) return;
     if (this.debounceTimer !== null) window.clearTimeout(this.debounceTimer);
-    this.debounceTimer = window.setTimeout(() => void this.read(), DEBOUNCE_MS);
+
+    this.debounceTimer = window.setTimeout(() => {
+      this.read().catch((error) => this.handleFailure(error));
+    }, DEBOUNCE_MS);
+  }
+
+  /**
+   * Stops for good when the extension is reloaded.
+   *
+   * Without this the observer keeps firing every 100ms against a dead runtime, throwing an
+   * unhandled rejection each time and filling the page's console until it is closed — which is
+   * exactly what happened in the field. There is nothing to retry: this script instance cannot be
+   * reconnected, only replaced by reloading the page.
+   */
+  private handleFailure(error: unknown): void {
+    // Several paths fail in the same tick - the pending read, the signal send, the health send -
+    // and each would otherwise announce the same thing. Once is informative; three times is noise
+    // that looks like a fault of its own.
+    if (this.orphaned) return;
+
+    if (isContextInvalidated(error)) {
+      this.orphaned = true;
+      this.stop();
+      console.info('[autolang] the extension was reloaded; reload this tab to resume');
+      return;
+    }
+
+    console.warn('[autolang] read failed', error);
   }
 
   private async read(): Promise<void> {
     this.debounceTimer = null;
+    if (this.orphaned) return;
 
     const health = this.adapter.checkHealth();
     this.maybeReportHealth(health.healthy, health.missing, health.tiers);
@@ -144,8 +189,16 @@ class ContentObserver {
   }
 
   private send(message: OutboundMessage): void {
-    // The service worker may be asleep or the extension mid-reload. Neither is worth surfacing.
-    chrome.runtime.sendMessage(message).catch(() => {});
+    // A sleeping service worker is ordinary and not worth surfacing. An invalidated context is
+    // different in kind: it never recovers, so swallowing it here left the observer running
+    // against a dead runtime.
+    try {
+      chrome.runtime.sendMessage(message).catch((error: unknown) => {
+        if (isContextInvalidated(error)) this.handleFailure(error);
+      });
+    } catch (error) {
+      this.handleFailure(error);
+    }
   }
 
   /** Exposed for the popup, which asks what conversation the page is currently on. */
