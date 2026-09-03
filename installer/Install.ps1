@@ -105,12 +105,36 @@ if ($firstBytes[0] -eq 0xEF -and $firstBytes[1] -eq 0xBB -and $firstBytes[2] -eq
 }
 Write-Host "wrote    $manifestPath"
 
-foreach ($browser in 'Google\Chrome', 'Microsoft\Edge') {
+# Every Chromium family member reads its own registry path, so registering only for Chrome and
+# Edge silently excludes Brave, Vivaldi, Opera, Arc and the beta channels. The failure that
+# produces is "Specified native messaging host not found" - which reads as though the registration
+# is broken, rather than absent from the one browser being used.
+#
+# Registering for all of them is per-user, costs nothing, and removes a whole class of support
+# question. A browser that is not installed simply never reads its key.
+$BrowserKeys = @(
+    'Google\Chrome'
+    'Google\Chrome Beta'
+    'Google\Chrome Dev'
+    'Google\Chrome SxS'
+    'Chromium'
+    'Microsoft\Edge'
+    'Microsoft\Edge Beta'
+    'Microsoft\Edge Dev'
+    'BraveSoftware\Brave-Browser'
+    'BraveSoftware\Brave-Browser-Beta'
+    'Vivaldi'
+    'Opera Software\Opera Stable'
+    'Opera Software\Opera GX Stable'
+    'ArcBrowser\Arc'
+)
+
+foreach ($browser in $BrowserKeys) {
     $key = "HKCU:\Software\$browser\NativeMessagingHosts\$HostName"
     New-Item -Path $key -Force | Out-Null
     Set-ItemProperty -Path $key -Name '(Default)' -Value $manifestPath
-    Write-Host "wrote    $key"
 }
+Write-Host ("wrote    native messaging registration for {0} browsers" -f $BrowserKeys.Count)
 
 # --- Start at sign-in -------------------------------------------------------------------------
 
