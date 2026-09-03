@@ -2,11 +2,17 @@
 
 Run of manual acceptance A against a live, logged-in WhatsApp Web session.
 
-**Verdict: the adapter is broken against today's WhatsApp.** It would collect zero usable messages
-and the product would sit at `NoSignal` forever. It fails safely — nothing switches wrongly — but
-nothing works either.
+**Verdict when first run: the adapter was broken against today's WhatsApp.** It collected zero
+usable messages and the product would have sat at `NoSignal` forever. It failed safely — nothing
+switched wrongly — but nothing worked either.
 
 This is exactly what the probe existed to find, and it found it on the first real run.
+
+**Fixed the same day.** Adapter v2.0.0 resolves direction by geometry. Verified live across 19
+messages in a real conversation containing both directions: 19 of 19 resolved, zero unknown, and
+the three signals agreed everywhere they overlapped — 16 cross-checks against the tail and 1
+against the sender label, with zero disagreements. The rest of this document records what was
+found and why the replacement works.
 
 ---
 

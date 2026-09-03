@@ -5,42 +5,51 @@ import type {
   SiteAdapter,
 } from '../site-adapter.js';
 import { analyze, relevantLetters } from '../../shared/text-normalizer.js';
+import { SELECTORS, resolve, resolveAll, type SelectorSpec } from './selectors.js';
 import {
-  SELECTORS,
-  chatIdFromRow,
-  directionOf,
-  resolve,
-  resolveAll,
-  type SelectorSpec,
-} from './selectors.js';
+  bubbleOf,
+  detectDirection,
+  domMeasure,
+  panelContext,
+  type DirectionEvidence,
+  type Measure,
+} from './direction.js';
 
 /**
  * Reads WhatsApp Web and produces letter counts.
  *
  * Two constraints shape everything here.
  *
- * Privacy: text is read, counted and discarded inside this function. Nothing that leaves carries
- * a character the user wrote. The only PII that even briefly exists is the chat JID, returned raw
- * purely so the caller can hash it.
+ * Privacy: text is read, counted and discarded inside one function. Nothing that leaves carries a
+ * character the user wrote. The only identifying value that even briefly exists is the chat title,
+ * returned raw purely so the caller can hash it.
  *
- * Fragility: WhatsApp is a single-page app whose DOM changes without notice. The adapter therefore
- * reports how well it recognised the page (`checkHealth`) rather than assuming it succeeded, so
- * the product can say "layout not recognized" instead of switching on garbage.
+ * Fragility: WhatsApp changes its DOM without notice, and did so between the first version of this
+ * file and the second. The adapter therefore reports how well it recognised the page rather than
+ * assuming it succeeded — and `checkHealth` now reports whether direction could actually be read,
+ * because the previous version passed every structural check while silently understanding nothing.
  */
 export class WhatsAppAdapter implements SiteAdapter {
   readonly site = 'web.whatsapp.com';
 
   /** Bump on any selector change. Surfaced in debug output so a field report identifies the build. */
-  readonly version = '1.0.0';
+  readonly version = '2.0.0';
+
+  private readonly measure: Measure;
+
+  /** The measure is injectable because jsdom performs no layout and reports every rect as zero. */
+  constructor(measure: Measure = domMeasure) {
+    this.measure = measure;
+  }
 
   matches(location: Location): boolean {
     return location.hostname === 'web.whatsapp.com';
   }
 
   observationRoot(): Element | null {
-    // Observing the message list, not document. PDR section 8 forbids scanning the whole document
-    // on every mutation, and WhatsApp mutates constantly for reasons unrelated to messages.
-    return resolve(SELECTORS.messageList).element ?? resolve(SELECTORS.mainPanel).element;
+    // The message list, not document. Observing everything would mean re-reading on every presence
+    // tick and timestamp update, which WhatsApp emits constantly.
+    return resolve(SELECTORS.messagesPanel).element ?? resolve(SELECTORS.mainPanel).element;
   }
 
   read(maxMessages: number): AdapterReading {
@@ -50,25 +59,38 @@ export class WhatsAppAdapter implements SiteAdapter {
       return { rawConversationId: null, messages: [], composerEmpty: true };
     }
 
+    const panel = resolve(SELECTORS.messagesPanel).element;
     const { elements: rows } = resolveAll(SELECTORS.messageRow, main);
 
-    // Rendered order is oldest to newest, so the tail is the recent history we care about.
+    // Rendered oldest to newest, so the tail is the recent history that matters.
     const recent = rows.slice(-maxMessages).reverse();
 
     const messages: ObservedMessage[] = [];
-    for (let index = 0; index < recent.length; index++) {
-      const row = recent[index]!;
-      const direction = directionOf(row);
-      if (!direction) continue; // Unknown direction is worse than no data. Skip it.
 
-      const counts = analyze(this.textOf(row));
-      if (relevantLetters(counts) === 0) continue;
+    if (panel) {
+      // Measured once. Every bubble is compared against the same frame, and doing it per row would
+      // force a layout pass per message.
+      const context = panelContext(panel, this.measure);
 
-      messages.push({ direction, counts, index });
+      for (const row of recent) {
+        // A row with no bubble is not a message: date dividers, encryption notices and unread
+        // markers are rows too.
+        if (!bubbleOf(row)) continue;
+
+        const { direction } = detectDirection(row, context, this.measure);
+
+        // Unknown direction is worse than no data, so the row is dropped rather than guessed.
+        if (!direction) continue;
+
+        const counts = analyze(this.textOf(row));
+        if (relevantLetters(counts) === 0) continue;
+
+        messages.push({ direction, counts, index: messages.length });
+      }
     }
 
     return {
-      rawConversationId: this.conversationIdFrom(rows, main),
+      rawConversationId: this.conversationIdFrom(main),
       messages,
       composerEmpty: this.isComposerEmpty(),
     };
@@ -94,15 +116,60 @@ export class WhatsAppAdapter implements SiteAdapter {
       if (tier === -1 && spec.required) missing.push(spec.name);
     }
 
+    // Structure is not comprehension.
+    //
+    // The previous adapter matched every selector it looked for and still understood nothing,
+    // because direction had quietly moved. Health now asks the question that actually matters:
+    // on a page with messages on it, can this adapter tell who sent them?
+    const evidence = this.directionEvidence();
+    if (evidence.rowsWithBubbles > 0 && evidence.resolved === 0) {
+      missing.push('messageDirection');
+    }
+
     return { healthy: missing.length === 0, missing, tiers };
+  }
+
+  /** How direction was determined across the visible messages. Diagnostic, and a health input. */
+  directionEvidence(): {
+    rowsWithBubbles: number;
+    resolved: number;
+    by: Record<DirectionEvidence, number>;
+  } {
+    const by: Record<DirectionEvidence, number> = {
+      geometry: 0,
+      'sender-label': 0,
+      tail: 0,
+      none: 0,
+    };
+
+    const main = resolve(SELECTORS.mainPanel).element;
+    const panel = resolve(SELECTORS.messagesPanel).element;
+    if (!main || !panel) return { rowsWithBubbles: 0, resolved: 0, by };
+
+    const context = panelContext(panel, this.measure);
+    const { elements: rows } = resolveAll(SELECTORS.messageRow, main);
+
+    let rowsWithBubbles = 0;
+    let resolved = 0;
+
+    for (const row of rows.slice(-10)) {
+      if (!bubbleOf(row)) continue;
+      rowsWithBubbles++;
+
+      const { direction, evidence } = detectDirection(row, context, this.measure);
+      by[evidence]++;
+      if (direction) resolved++;
+    }
+
+    return { rowsWithBubbles, resolved, by };
   }
 
   /**
    * Text of one bubble.
    *
    * Falls back to the row's own textContent when no text span matches, which picks up timestamps
-   * and status words. That is acceptable: those are digits and short strings that the letter
-   * counter discards anyway, and over-reading is safer than silently reading nothing.
+   * and status words. Acceptable: those are digits and short strings the letter counter discards,
+   * and over-reading is safer than silently reading nothing.
    */
   private textOf(row: Element): string {
     const { elements } = resolveAll(SELECTORS.messageText, row);
@@ -112,20 +179,21 @@ export class WhatsAppAdapter implements SiteAdapter {
   }
 
   /**
-   * Conversation identity, most stable source first.
+   * Conversation identity — and a known weakness.
    *
-   * The JID from data-id is preferred because it survives renames and redesigns. The header title
-   * is a weaker fallback: it changes when a contact is renamed, which silently orphans a saved
-   * preference. Both are PII and hashed by the caller.
+   * This used to come from the chat JID inside `data-id`, which survived renames. That JID is gone
+   * from the DOM entirely: as of September 2026 no element anywhere on the page carries one. The
+   * only remaining per-conversation identifier is the header title, so renaming a contact orphans
+   * their saved preference and the conversation is learned again from scratch.
+   *
+   * Degrading rather than failing is the right trade — a forgotten preference costs one keystroke —
+   * but it is a real regression and worth fixing if a stable id ever reappears.
+   *
+   * Returned raw so the caller is forced to hash it. It is a contact name or phone number.
    */
-  private conversationIdFrom(rows: readonly Element[], main: Element): string | null {
-    for (const row of rows) {
-      const jid = chatIdFromRow(row);
-      if (jid) return `jid:${jid}`;
-    }
-
-    const header = resolve<HTMLElement>(SELECTORS.conversationHeader, main).element;
-    const title = header?.textContent?.trim();
-    return title ? `title:${title}` : null;
+  private conversationIdFrom(main: Element): string | null {
+    const title = resolve<HTMLElement>(SELECTORS.conversationTitle, main).element;
+    const text = title?.textContent?.trim();
+    return text ? `title:${text}` : null;
   }
 }

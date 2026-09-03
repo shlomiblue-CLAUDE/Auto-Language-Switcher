@@ -152,7 +152,7 @@ Fill in when run. An empty row is more useful than an assumed one.
 | Automated suite (201 tests) | 2026-09-03 | PASS | |
 | Privacy audit | 2026-09-03 | PASS, 1 skipped | Store empty; stored-data check did not run |
 | Bridge smoke test (5) | 2026-09-03 | PASS | Against the installed build |
-| Manual A — selectors | 2026-09-03 | **FAIL** | Direction detection dead. See WHATSAPP_DOM_2026-09.md |
+| Manual A — selectors | 2026-09-03 | FAIL, then PASS | Direction was dead; adapter v2.0.0 resolves 19/19 live, 0 disagreements |
 | Manual B — network | | | |
 | Manual C — 30 switches | | | |
 | Manual D — Edge foreground | 2026-09-03 | PASS | 7/8, 15–25ms; real switch applied by the shipped binary |

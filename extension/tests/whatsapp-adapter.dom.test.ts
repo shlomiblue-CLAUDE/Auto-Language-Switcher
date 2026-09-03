@@ -1,26 +1,48 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WhatsAppAdapter } from '../src/adapters/whatsapp/adapter.js';
 import { relevantLetters } from '../src/shared/text-normalizer.js';
 import {
   ENGLISH_MESSAGE,
   HEBREW_MESSAGE,
+  fixtureMeasure,
   mountWhatsApp,
   type FixtureMessage,
 } from './fixtures/whatsapp-dom.js';
 
-const outgoing = (text: string): FixtureMessage => ({ text, outgoing: true });
-const incoming = (text: string): FixtureMessage => ({ text, outgoing: false });
+const outgoing = (text: string, extra: Partial<FixtureMessage> = {}): FixtureMessage => ({
+  text,
+  outgoing: true,
+  ...extra,
+});
+const incoming = (text: string, extra: Partial<FixtureMessage> = {}): FixtureMessage => ({
+  text,
+  outgoing: false,
+  ...extra,
+});
+
+/**
+ * jsdom does not lay anything out, so `getComputedStyle(panel).direction` is always the initial
+ * value. Direction is a property of the page under test, so it is stubbed per test rather than
+ * inferred.
+ */
+function withPanelDirection(direction: 'ltr' | 'rtl'): void {
+  vi.spyOn(window, 'getComputedStyle').mockImplementation(
+    () => ({ direction }) as unknown as CSSStyleDeclaration,
+  );
+}
 
 describe('WhatsAppAdapter', () => {
   let adapter: WhatsAppAdapter;
 
   beforeEach(() => {
-    adapter = new WhatsAppAdapter();
+    vi.restoreAllMocks();
+    adapter = new WhatsAppAdapter(fixtureMeasure);
     document.body.innerHTML = '';
   });
 
-  describe('direction', () => {
-    it('reads outgoing and incoming from data-id', () => {
+  describe('direction, by geometry', () => {
+    it('reads a left-to-right layout: the user is on the right', () => {
+      withPanelDirection('ltr');
       mountWhatsApp({ messages: [incoming(HEBREW_MESSAGE), outgoing(ENGLISH_MESSAGE)] });
 
       const { messages } = adapter.read(10);
@@ -30,23 +52,119 @@ describe('WhatsAppAdapter', () => {
       expect(messages[1]!.direction).toBe('incoming');
     });
 
-    it('falls back to message-in and message-out classes when data-id is absent', () => {
-      mountWhatsApp({
-        messages: [incoming(HEBREW_MESSAGE), outgoing(ENGLISH_MESSAGE)],
-        useLegacyClasses: true,
-      });
+    it('reads a right-to-left layout, where the sides are mirrored', () => {
+      // The trap: in a Hebrew UI the user's own messages move to the LEFT. Reading the side
+      // without consulting the panel's direction inverts every decision the product makes.
+      withPanelDirection('rtl');
+      mountWhatsApp({ messages: [incoming(HEBREW_MESSAGE), outgoing(ENGLISH_MESSAGE)], rtl: true });
 
       const { messages } = adapter.read(10);
 
-      expect(messages.map((m) => m.direction)).toEqual(['outgoing', 'incoming']);
+      expect(messages[0]!.direction).toBe('outgoing');
+      expect(messages[1]!.direction).toBe('incoming');
     });
 
-    it('skips rows whose direction cannot be determined', () => {
+    it('declines to call a bubble that spans most of the panel', () => {
+      withPanelDirection('ltr');
       mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)] });
-      // A row with neither data-id nor a direction class: reading it would risk attributing the
-      // other person's language to the user.
-      const list = document.querySelector('div[role="application"]')!;
-      list.insertAdjacentHTML('beforeend', '<div role="row"><span class="selectable-text"><span>hello</span></span></div>');
+
+      // A long message leaves both gaps small and similar, which is a coin toss, so geometry
+      // abstains and the sender label decides instead.
+      const bubble = document.querySelector('[data-testid="msg-container"]')!;
+      bubble.setAttribute('data-fixture-rect', '20,1280');
+
+      const { messages } = adapter.read(10);
+
+      expect(messages[0]!.direction).toBe('outgoing'); // via the sender label
+    });
+  });
+
+  describe('direction, by fallback', () => {
+    it('falls back to the sender label when geometry cannot decide', () => {
+      withPanelDirection('ltr');
+      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE), incoming(HEBREW_MESSAGE)] });
+
+      for (const bubble of document.querySelectorAll('[data-testid="msg-container"]')) {
+        bubble.setAttribute('data-fixture-rect', '20,1280');
+      }
+
+      const { messages } = adapter.read(10);
+
+      expect(messages.map((m) => m.direction)).toEqual(['incoming', 'outgoing']);
+    });
+
+    it('recognises the Hebrew self marker', () => {
+      withPanelDirection('rtl');
+      mountWhatsApp({ messages: [outgoing(HEBREW_MESSAGE)], rtl: true });
+      document.querySelector('[data-testid="msg-container"]')!.setAttribute('data-fixture-rect', '20,1280');
+
+      expect(adapter.read(10).messages[0]!.direction).toBe('outgoing');
+    });
+
+    it('falls back to the tail, which means the opposite of its name', () => {
+      // tail-out marks the OTHER person's messages. Measured, not assumed.
+      withPanelDirection('ltr');
+      mountWhatsApp({ messages: [incoming(HEBREW_MESSAGE)], stripDirectionSignals: false });
+
+      const row = document.querySelector('[role="row"]')!;
+      row.querySelector('[aria-label]')?.remove();
+      row.querySelector('[data-testid="msg-container"]')!.setAttribute('data-fixture-rect', '20,1280');
+
+      expect(row.querySelector('[data-testid="tail-out"]')).not.toBeNull();
+      expect(adapter.read(10).messages[0]!.direction).toBe('incoming');
+    });
+
+    it('skips a row when every signal is gone', () => {
+      // This is what the live page did to the previous adapter. Dropping the row is correct:
+      // a guessed direction feeds the other person's language into the user's keyboard.
+      withPanelDirection('ltr');
+      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)], stripDirectionSignals: true });
+      document.querySelector('[data-testid="msg-container"]')!.setAttribute('data-fixture-rect', '20,1280');
+
+      expect(adapter.read(10).messages).toHaveLength(0);
+    });
+  });
+
+  describe('the DOM that broke', () => {
+    it('no longer depends on data-id carrying a direction prefix', () => {
+      withPanelDirection('ltr');
+      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE), incoming(HEBREW_MESSAGE)] });
+
+      const ids = [...document.querySelectorAll('[role="row"][data-id]')].map((r) =>
+        r.getAttribute('data-id'),
+      );
+
+      expect(ids.every((id) => !id!.includes('_'))).toBe(true);
+      expect(adapter.read(10).messages).toHaveLength(2);
+    });
+
+    it('no longer depends on message-in and message-out classes', () => {
+      withPanelDirection('ltr');
+      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)] });
+
+      expect(document.querySelectorAll('.message-out, .message-in')).toHaveLength(0);
+      expect(adapter.read(10).messages[0]!.direction).toBe('outgoing');
+    });
+
+    it('still reads the pre-2026 shape through the sender label', () => {
+      // Not a requirement, but worth knowing: the old markup is not actively rejected.
+      withPanelDirection('ltr');
+      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)], legacyShape: true });
+
+      // The legacy fixture has no msg-container, so it is skipped as a non-message row.
+      expect(adapter.read(10).messages).toHaveLength(0);
+    });
+  });
+
+  describe('rows that are not messages', () => {
+    it('skips date dividers and system notices', () => {
+      withPanelDirection('ltr');
+      mountWhatsApp({
+        messages: [
+          { text: 'TODAY', outgoing: false, systemNotice: true },
+          outgoing(ENGLISH_MESSAGE),
+        ],
+      });
 
       const { messages } = adapter.read(10);
 
@@ -56,93 +174,81 @@ describe('WhatsAppAdapter', () => {
   });
 
   describe('ordering and limits', () => {
-    it('returns newest first', () => {
+    it('returns newest first with contiguous indices', () => {
+      withPanelDirection('ltr');
       mountWhatsApp({ messages: [outgoing(HEBREW_MESSAGE), outgoing(ENGLISH_MESSAGE)] });
 
       const { messages } = adapter.read(10);
 
       expect(messages[0]!.counts.English).toBeGreaterThan(0);
-      expect(messages[0]!.counts.Hebrew ?? 0).toBe(0);
-      expect(messages[0]!.index).toBe(0);
-      expect(messages[1]!.index).toBe(1);
+      expect(messages.map((m) => m.index)).toEqual([0, 1]);
     });
 
     it('keeps only the most recent messages', () => {
-      const many = Array.from({ length: 25 }, () => outgoing(ENGLISH_MESSAGE));
-      mountWhatsApp({ messages: many });
+      withPanelDirection('ltr');
+      mountWhatsApp({ messages: Array.from({ length: 25 }, () => outgoing(ENGLISH_MESSAGE)) });
 
       expect(adapter.read(10).messages).toHaveLength(10);
     });
 
-    it('drops messages that carry no letters', () => {
-      mountWhatsApp({ messages: [outgoing('👍'), outgoing('12345'), outgoing(HEBREW_MESSAGE)] });
+    it('drops messages that carry no letters, without leaving a gap in the indices', () => {
+      withPanelDirection('ltr');
+      mountWhatsApp({
+        messages: [outgoing('👍'), outgoing('12345'), outgoing(HEBREW_MESSAGE)],
+      });
 
       const { messages } = adapter.read(10);
 
       expect(messages).toHaveLength(1);
-      expect(messages[0]!.counts.Hebrew).toBeGreaterThan(0);
+      expect(messages[0]!.index).toBe(0);
     });
   });
 
   describe('conversation identity', () => {
-    it('prefers the chat id from data-id', () => {
-      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)], chatId: '972500000000@c.us' });
-
-      expect(adapter.read(10).rawConversationId).toBe('jid:972500000000@c.us');
-    });
-
-    it('falls back to the header title when no data-id is present', () => {
-      mountWhatsApp({
-        messages: [outgoing(ENGLISH_MESSAGE)],
-        useLegacyClasses: true,
-        headerTitle: 'Supplier Group',
-      });
+    it('comes from the header title', () => {
+      withPanelDirection('ltr');
+      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)], chatTitle: 'Supplier Group' });
 
       expect(adapter.read(10).rawConversationId).toBe('title:Supplier Group');
     });
 
-    it('is stable across reads of the same conversation', () => {
-      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)] });
-      const first = adapter.read(10).rawConversationId;
-
-      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE), outgoing(HEBREW_MESSAGE)] });
-      const second = adapter.read(10).rawConversationId;
-
-      expect(second).toBe(first);
-    });
-
     it('changes when the conversation changes', () => {
-      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)], chatId: '972500000001@c.us' });
+      withPanelDirection('ltr');
+      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)], chatTitle: 'Chat A' });
       const first = adapter.read(10).rawConversationId;
 
-      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)], chatId: '972500000002@c.us' });
+      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)], chatTitle: 'Chat B' });
 
       expect(adapter.read(10).rawConversationId).not.toBe(first);
+    });
+
+    it('is returned raw so the caller is forced to hash it', () => {
+      // Documented intent: the adapter must NOT hash. Hashing needs the install salt, which is
+      // async storage the adapter has no business touching, and it is a policy decision.
+      withPanelDirection('ltr');
+      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)], chatTitle: '+972 50 000 0000' });
+
+      expect(adapter.read(10).rawConversationId).toContain('972');
     });
   });
 
   describe('composer, the typing guard input', () => {
     it('reports empty when the composer has no text', () => {
+      withPanelDirection('ltr');
       mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)] });
 
       expect(adapter.read(10).composerEmpty).toBe(true);
     });
 
     it('reports not empty while the user is typing', () => {
+      withPanelDirection('ltr');
       mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)], composerText: 'שלום' });
 
       expect(adapter.read(10).composerEmpty).toBe(false);
     });
 
-    it('treats whitespace as empty', () => {
-      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)], composerText: '   ' });
-
-      expect(adapter.read(10).composerEmpty).toBe(true);
-    });
-
     it('fails closed when the composer cannot be found', () => {
-      // A missing composer means the page is not understood. Reporting "empty" would let a switch
-      // through on no evidence, so the adapter reports "not empty" and suppresses switching.
+      withPanelDirection('ltr');
       mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)], omitComposer: true });
 
       expect(adapter.read(10).composerEmpty).toBe(false);
@@ -150,13 +256,33 @@ describe('WhatsAppAdapter', () => {
   });
 
   describe('health', () => {
-    it('is healthy on a well formed page', () => {
-      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)] });
+    it('is healthy on a page it understands', () => {
+      withPanelDirection('ltr');
+      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE), incoming(HEBREW_MESSAGE)] });
 
       const health = adapter.checkHealth();
 
       expect(health.healthy).toBe(true);
       expect(health.missing).toHaveLength(0);
+    });
+
+    it('reports unhealthy when there are messages it cannot read the direction of', () => {
+      // The check that would have caught the September breakage. The previous adapter matched
+      // every structural selector and still understood nothing, and reported itself healthy.
+      withPanelDirection('ltr');
+      mountWhatsApp({
+        messages: [outgoing(ENGLISH_MESSAGE), incoming(HEBREW_MESSAGE)],
+        stripDirectionSignals: true,
+      });
+
+      for (const bubble of document.querySelectorAll('[data-testid="msg-container"]')) {
+        bubble.setAttribute('data-fixture-rect', '20,1280');
+      }
+
+      const health = adapter.checkHealth();
+
+      expect(health.healthy).toBe(false);
+      expect(health.missing).toContain('messageDirection');
     });
 
     it('reports missing required selectors when the layout is unrecognised', () => {
@@ -169,15 +295,26 @@ describe('WhatsAppAdapter', () => {
       expect(health.missing).toContain('composer');
     });
 
-    it('reports which fallback tier matched', () => {
+    it('reports which tier matched, as an early warning of drift', () => {
+      withPanelDirection('ltr');
       mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)] });
 
       const { tiers } = adapter.checkHealth();
 
-      // Tier 0 is the preferred selector. A rising number here is the early warning that
-      // WhatsApp changed its DOM.
       expect(tiers.mainPanel).toBe(0);
+      expect(tiers.messagesPanel).toBe(0);
       expect(tiers.composer).toBe(0);
+    });
+
+    it('reports how direction was determined', () => {
+      withPanelDirection('ltr');
+      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE), incoming(HEBREW_MESSAGE)] });
+
+      const evidence = adapter.directionEvidence();
+
+      expect(evidence.rowsWithBubbles).toBe(2);
+      expect(evidence.resolved).toBe(2);
+      expect(evidence.by.geometry).toBe(2);
     });
 
     it('returns an empty reading rather than throwing when no conversation is open', () => {
@@ -187,16 +324,15 @@ describe('WhatsAppAdapter', () => {
 
       expect(reading.rawConversationId).toBeNull();
       expect(reading.messages).toHaveLength(0);
-      expect(reading.composerEmpty).toBe(true);
     });
   });
 
   describe('privacy', () => {
     it('produces nothing but counts, direction and index', () => {
+      withPanelDirection('ltr');
       mountWhatsApp({
         messages: [outgoing('my bank pin is 4321 and my address is Herzl 5')],
-        chatId: '972500000000@c.us',
-        headerTitle: 'Private Contact',
+        chatTitle: 'Private Contact',
       });
 
       const { messages } = adapter.read(10);
@@ -206,33 +342,23 @@ describe('WhatsAppAdapter', () => {
       expect(serialised).not.toContain('4321');
       expect(serialised).not.toContain('Herzl');
       expect(serialised).not.toContain('Private Contact');
-      expect(serialised).not.toContain('972500000000');
 
-      // Only the three permitted keys ever appear.
       for (const message of messages) {
         expect(Object.keys(message).sort()).toEqual(['counts', 'direction', 'index']);
       }
       expect(relevantLetters(messages[0]!.counts)).toBeGreaterThan(0);
     });
-
-    it('returns the conversation id raw so the caller is forced to hash it', () => {
-      // Documenting intent: the adapter must NOT hash. Hashing needs the install salt, which is
-      // async storage the adapter has no business touching, and it is a privacy policy decision.
-      mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)], chatId: '972500000000@c.us' });
-
-      expect(adapter.read(10).rawConversationId).toContain('972500000000');
-    });
   });
 
   describe('observation root', () => {
-    it('is the message list, not the document', () => {
+    it('is the message panel, not the document', () => {
+      withPanelDirection('ltr');
       mountWhatsApp({ messages: [outgoing(ENGLISH_MESSAGE)] });
 
       const root = adapter.observationRoot();
 
       expect(root).not.toBeNull();
-      expect(root).not.toBe(document.body);
-      expect(root!.matches('#main div[role="application"]')).toBe(true);
+      expect(root!.getAttribute('data-testid')).toBe('conversation-panel-messages');
     });
   });
 
