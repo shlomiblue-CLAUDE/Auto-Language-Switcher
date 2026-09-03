@@ -296,6 +296,66 @@ public class DecisionEngineTests
     }
 
     [Fact]
+    public void The_other_persons_language_is_acted_on_but_never_remembered()
+    {
+        // The defect a user found after thirty switches: it started well and got worse, and
+        // clearing the store fixed it. Incoming messages are a hint good enough to act on once.
+        // Written to memory they become permanent, because memory outranks the user's own
+        // messages on every later visit - so a conversation where the other person writes Hebrew
+        // would answer Hebrew forever, however much English the user typed into it.
+        var decision = Decide(Request(
+            [Incoming(Language.Hebrew, 100, 0)],
+            currentLayout: Language.English));
+
+        Assert.Equal(DecisionOutcome.Switch, decision.Outcome);
+        Assert.Equal(DecisionSource.AllMessagesFallback, decision.Source);
+        Assert.Equal(Language.Unknown, decision.LearnedLanguage);
+    }
+
+    [Fact]
+    public void The_users_own_messages_are_still_remembered()
+    {
+        // The other half of the line. Narrowing what gets recorded is only correct if the evidence
+        // that should be recorded still is.
+        var decision = Decide(Request(
+            [Outgoing(Language.Hebrew, 100, 0)],
+            currentLayout: Language.English));
+
+        Assert.Equal(DecisionSource.OutgoingMessages, decision.Source);
+        Assert.Equal(Language.Hebrew, decision.LearnedLanguage);
+    }
+
+    [Fact]
+    public void Memory_written_only_from_the_user_cannot_argue_with_the_user()
+    {
+        // The end-to-end shape of the bug, as a single test: act on the other person's language,
+        // record nothing, and the next visit is still free to read what the user actually writes.
+        var incoming = Decide(Request(
+            [Incoming(Language.Hebrew, 100, 0)],
+            currentLayout: Language.English));
+
+        var remembered = incoming.LearnedLanguage == Language.Unknown
+            ? null
+            : new ConversationPreference
+            {
+                Mode = ConversationMode.Auto,
+                LastReliableLanguage = incoming.LearnedLanguage,
+                UpdatedAt = _clock.Now,
+            };
+
+        // Past the hysteresis window, so what follows is the precedence being tested and not the
+        // rate limit answering for it.
+        _clock.Advance(TimeSpan.FromSeconds(5));
+
+        var next = Decide(
+            Request([Outgoing(Language.English, 100, 0)], currentLayout: Language.Hebrew),
+            preference: remembered);
+
+        Assert.Equal(Language.English, next.Language);
+        Assert.Equal(DecisionSource.OutgoingMessages, next.Source);
+    }
+
+    [Fact]
     public void Stale_memory_stops_outranking_fresh_analysis()
     {
         // A conversation dormant for months may have changed language entirely.

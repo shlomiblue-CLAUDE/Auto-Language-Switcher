@@ -169,11 +169,25 @@ public sealed class DecisionEngine
     private static bool IsInManualCooldown(ConversationPreference? preference, Settings settings, DateTimeOffset now) =>
         preference?.ManualOverrideAt is { } overriddenAt && now - overriddenAt < settings.ManualCooldown;
 
-    /// <summary>A pin is not something we learned, so it must not be written back as one.</summary>
+    /// <summary>
+    /// What may be written back as this conversation's remembered language.
+    ///
+    /// Only evidence about the user. A pin is an instruction, not an observation. And the
+    /// all-messages fallback is the other person's words - a hint worth acting on once, and never
+    /// worth recording, because memory outranks the user's own messages on every later visit.
+    ///
+    /// Recording it was a real defect and it behaved exactly as the priority order predicts. In a
+    /// conversation where the other person writes Hebrew and the user answers in English, the
+    /// fallback wrote Hebrew into memory, and from then on every visit returned Hebrew at
+    /// confidence 1.00 and outranked the English the user was actually typing. It got worse over
+    /// time rather than better, and clearing the store fixed it - which is what a user reported,
+    /// in those words, after thirty conversation switches.
+    ///
+    /// The class comment above claims memory is "what the user's keyboard was actually set to
+    /// while they typed". This is what makes that true.
+    /// </summary>
     private static Language LearnedFrom(DecisionSource source, Language language) =>
-        source is DecisionSource.OutgoingMessages or DecisionSource.AllMessagesFallback
-            ? language
-            : Language.Unknown;
+        source is DecisionSource.OutgoingMessages ? language : Language.Unknown;
 
     private static Decision Suppressed(DecisionBlocker blocker) =>
         new() { Outcome = DecisionOutcome.Suppressed, Blocker = blocker };
