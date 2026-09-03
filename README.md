@@ -10,7 +10,9 @@ before you start typing.
 Everything happens on your computer. There is no server, no account, and no network request of any
 kind. See [PRIVACY.md](docs/PRIVACY.md), which cites the code for each claim.
 
-**Status:** working end to end on WhatsApp Web. Not yet published to the Chrome Web Store.
+**Status:** the pipeline works end to end - a signal reaches Windows and the layout changes. The
+WhatsApp adapter needs rewriting against the current DOM before it does anything useful on real
+conversations; see What is not done.
 
 ## How it decides
 
@@ -102,8 +104,11 @@ Hebrew and English ship today. Adding Russian or Arabic is one row in
 
 ## What is not done
 
-- Selectors are validated against synthetic DOM fixtures, not today's live WhatsApp. Run
-  [`tools/whatsapp-selector-probe.js`](tools/whatsapp-selector-probe.js) to check.
+- **The adapter does not work against today's WhatsApp.** Verified 2026-09-03 against a live
+  session: the `message-in`/`message-out` classes are gone and `data-id` no longer carries
+  direction, so every message is skipped as undetermined. It fails safely - nothing switches
+  wrongly - but nothing works either. Findings and the replacement signals are in
+  [`docs/WHATSAPP_DOM_2026-09.md`](docs/WHATSAPP_DOM_2026-09.md).
 - Not code-signed, so the installer trips SmartScreen.
 - Not in the Chrome Web Store.
 
