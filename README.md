@@ -103,7 +103,6 @@ Hebrew and English ship today. Adding Russian or Arabic is one row in
 
 - Selectors are validated against synthetic DOM fixtures, not today's live WhatsApp. Run
   [`tools/whatsapp-selector-probe.js`](tools/whatsapp-selector-probe.js) to check.
-- Edge is proven against a background window; a foreground run is still unconfirmed.
 - Not code-signed, so the installer trips SmartScreen.
 - Not in the Chrome Web Store.
 

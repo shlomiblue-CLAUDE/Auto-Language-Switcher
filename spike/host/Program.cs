@@ -36,16 +36,81 @@ void Countdown(int seconds)
     Console.WriteLine("\n");
 }
 
+/// <summary>
+/// Forces a window to the foreground, which Windows normally refuses.
+///
+/// SetForegroundWindow alone fails whenever the caller does not already own the foreground - the
+/// lock exists so background programs cannot steal focus mid-keystroke. Attaching our input queue
+/// to the current foreground thread makes Windows treat the call as coming from the app that
+/// already has focus, which is the documented way to raise a window on purpose.
+///
+/// This is diagnostic code and stays in the spike. The product must never do this: a keyboard
+/// switcher that grabs focus would be worse than the problem it solves.
+/// </summary>
+bool Activate(IntPtr hwnd)
+{
+    var foreground = Native.GetForegroundWindow();
+    if (foreground == hwnd) return true;
+
+    uint foregroundThread = Native.GetWindowThreadProcessId(foreground, out _);
+    uint targetThread = Native.GetWindowThreadProcessId(hwnd, out _);
+
+    // A lone ALT press and release. Windows grants foreground rights to a process it believes the
+    // user just interacted with, and this is the documented way to claim that - the same trick
+    // installers and updaters use. Harmless on its own: pressing ALT and letting go focuses the
+    // menu bar and immediately releases it.
+    Native.keybd_event(Native.VK_MENU, 0, 0, UIntPtr.Zero);
+    Native.keybd_event(Native.VK_MENU, 0, Native.KEYEVENTF_KEYUP, UIntPtr.Zero);
+
+    uint self = Native.GetCurrentThreadId();
+    bool attachedToForeground = foregroundThread != self && Native.AttachThreadInput(self, foregroundThread, true);
+    bool attachedToTarget = targetThread != self && Native.AttachThreadInput(self, targetThread, true);
+
+    Console.WriteLine($"activate   attach: foreground={attachedToForeground} target={attachedToTarget}");
+
+    try
+    {
+        Native.ShowWindow(hwnd, Native.SW_RESTORE);
+        Native.BringWindowToTop(hwnd);
+        Native.SetForegroundWindow(hwnd);
+    }
+    finally
+    {
+        if (attachedToTarget) Native.AttachThreadInput(self, targetThread, false);
+        if (attachedToForeground) Native.AttachThreadInput(self, foregroundThread, false);
+    }
+
+    // Windows can report success and do nothing, so the only answer that counts is what it says
+    // afterwards.
+    for (int i = 0; i < 20; i++)
+    {
+        if (Native.GetForegroundWindow() == hwnd) return true;
+        Thread.Sleep(50);
+    }
+    return false;
+}
+
 // Returns the window to act on, plus whether it is genuinely the foreground window.
 (IntPtr Hwnd, bool IsForeground, string? Error) ResolveTarget()
 {
-    var fg = KeyboardLayoutService.ForegroundHwnd();
-    var wanted = ArgVal("--process");
-    if (wanted is null) return (fg, true, null);
+    var wanted = ArgVal("--process") ?? ArgVal("--activate");
+
+    if (wanted is null) return (KeyboardLayoutService.ForegroundHwnd(), true, null);
 
     var proc = Process.GetProcessesByName(wanted).FirstOrDefault(p => p.MainWindowHandle != IntPtr.Zero);
     if (proc is null) return (IntPtr.Zero, false, $"no '{wanted}' process with a main window");
-    return (proc.MainWindowHandle, proc.MainWindowHandle == fg, null);
+
+    var hwnd = proc.MainWindowHandle;
+
+    if (ArgVal("--activate") is not null)
+    {
+        bool raised = Activate(hwnd);
+        Console.WriteLine(raised
+            ? $"activated  {wanted} is now the foreground window"
+            : $"activated  FAILED to raise {wanted}; Windows refused");
+    }
+
+    return (hwnd, hwnd == KeyboardLayoutService.ForegroundHwnd(), null);
 }
 
 void PrintTarget(IntPtr hwnd, bool isForeground)

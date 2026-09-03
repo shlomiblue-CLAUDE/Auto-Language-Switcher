@@ -120,19 +120,26 @@ Task Manager, Details tab, watch `AutoLang.exe`.
 
 ---
 
-## Manual D — Edge in the foreground
+## Manual D — Edge in the foreground ✅ done 2026-09-03
 
-Edge was verified against a **background** window only, because Windows' foreground lock refused
-programmatic activation while another app was in use. Chrome passed in the foreground and Edge uses
-the identical window class, so the risk is low — but it is unproven, and unproven is not proven.
+7/8 transitions, `foreground=True`, 15–25ms — identical to Chrome, including which strategy fails.
+The shipped binary then applied a real switch to that same window:
+
+```json
+{"outcome":"Switch","language":"he-IL","source":"OutgoingMessages","applied":true}
+```
+
+To repeat it, the spike can raise Edge itself:
 
 ```powershell
 cd "D:\claude workspace\H-E\spike\host"
-.\bin\Debug\net8.0-windows\AutoLangSpike.exe matrix --delay 8
+.\bin\Debug\net8.0-windows\AutoLangSpike.exe matrix --activate msedge --delay 1
 ```
 
-Click into an Edge window during the countdown. Expected: `post-toplevel` passes all three
-transitions with `foreground=True`.
+`--activate` forces the window forward with a synthetic ALT press, because Windows refuses
+`SetForegroundWindow` from a process that does not already hold focus — `AttachThreadInput` alone
+was not enough either. **The product must never do this**; it lives in the spike, which is
+diagnostic code. A keyboard switcher that grabs focus would be worse than the problem it solves.
 
 ---
 
@@ -148,7 +155,7 @@ Fill in when run. An empty row is more useful than an assumed one.
 | Manual A — selectors | | | |
 | Manual B — network | | | |
 | Manual C — 30 switches | | | |
-| Manual D — Edge foreground | | | |
+| Manual D — Edge foreground | 2026-09-03 | PASS | 7/8, 15–25ms; real switch applied by the shipped binary |
 
 ---
 

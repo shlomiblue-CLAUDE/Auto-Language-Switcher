@@ -59,7 +59,40 @@ post-syscharset    en    PASS   0xF03D040D  0x04090409  27
 attach-activate    he    FAIL   0x04090409  0x04090409  401 (timeout)
 ```
 
-### Edge (background window — see caveat)
+### Edge (foreground — closed 2026-09-03)
+
+```
+strategy           lang  result before       after        ms
+post-toplevel      en    PASS   0xF03D040D   0x04090409   25
+post-toplevel      he    PASS   0x04090409   0xF03D040D   16
+post-toplevel      en    PASS   0xF03D040D   0x04090409   17
+post-focus         he    PASS   0x04090409   0xF03D040D   16
+post-focus         en    PASS   0xF03D040D   0x04090409   15
+post-syscharset    he    PASS   0x04090409   0xF03D040D   16
+post-syscharset    en    PASS   0xF03D040D   0x04090409   15
+attach-activate    he    FAIL   0x04090409   0x04090409   403 (timeout)
+7/8 real transitions passed against msedge (foreground=True)
+```
+
+Identical to Chrome, including which strategy fails. 15–25ms.
+
+Getting Edge to the foreground took two attempts, and the failure is worth recording because it is
+the same lock the product relies on. `SetForegroundWindow` was refused outright; adding
+`AttachThreadInput` was still refused. What worked was a synthetic ALT press first — Windows grants
+foreground rights to a process it believes the user just interacted with. The spike reports whether
+each attachment succeeded rather than assuming.
+
+**The product must never do this.** A keyboard switcher that grabs focus would be worse than the
+problem it solves. The trick lives in the spike, which is diagnostic code.
+
+The whole product was then run against that foreground Edge window — the installed 12.6MB binary,
+through native messaging framing, over the named pipe, through the decision engine:
+
+```json
+{"outcome":"Switch","language":"he-IL","confidence":1,"source":"OutgoingMessages","applied":true}
+```
+
+### Edge (background window — the original run)
 
 ```
 post-toplevel      en    PASS   0xF03D040D  0x04090409  23
@@ -109,20 +142,15 @@ for each app window" is **ON** on this machine, which is the mode the product is
 
 Recorded honestly rather than assumed:
 
-1. **Edge as a true foreground window.** Edge was tested as a background window because Windows'
-   foreground lock refused programmatic activation while the user was working in Chrome.
-   Chromium's window class is identical (`Chrome_WidgetWin_1`) and Chrome passed in the foreground,
-   so the risk is low — but it is unproven. Manual confirmation:
-   ```bash
-   cd "D:/claude workspace/H-E/spike/host" && ./bin/Debug/net8.0-windows/AutoLangSpike.exe matrix --delay 8
-   ```
-   Then click into the Edge window during the countdown.
+1. ~~**Edge as a true foreground window.**~~ **Closed 2026-09-03** — see the foreground matrix
+   above. 7/8, identical to Chrome, plus a real switch applied by the shipped product.
 
-2. **Per-window input mode OFF.** Untested. With a system-wide layout, switching would affect every
-   window at once, making the foreground guard critical rather than merely correct. Requires
+2. **Per-window input mode OFF.** Still untested. With a system-wide layout, switching would affect
+   every window at once, making the foreground guard critical rather than merely correct. Requires
    toggling a system setting, so it is left for the user to decide.
 
-3. **Native messaging round trip.** Not part of this gate; the layout risk was the blocking unknown.
+3. ~~**Native messaging round trip.**~~ **Closed in phase 4** — `tools/bridge-smoke-test.mjs`
+   drives the real chain across three processes on every run.
 
 ## Commands
 

@@ -1,0 +1,9 @@
+activated  msedge is now the foreground window
+target     : hwnd=0x2271132 thread=21624 process=msedge
+class      : Chrome_WidgetWin_1
+title      : ??file:///D:/claude? …’…ƒ €‡ƒ …‘“ - ”˜…”‰Œ 1 - Microsoft? Edge?
+foreground : YES
+focus hwnd : 0x2271132
+layout now : 0x04090409
+
+PASS  strategy=post-toplevel  0x04090409 -> 0x04090409  (0ms) 

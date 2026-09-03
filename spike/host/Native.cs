@@ -41,6 +41,27 @@ internal static class Native
     [DllImport("user32.dll")]
     public static extern IntPtr ActivateKeyboardLayout(IntPtr hkl, uint flags);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    public const int SW_RESTORE = 9;
+    public const int SW_MINIMIZE = 6;
+
+    [DllImport("user32.dll")]
+    public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extraInfo);
+
+    public const byte VK_MENU = 0x12;          // ALT
+    public const uint KEYEVENTF_KEYUP = 0x0002;
+
     [DllImport("kernel32.dll")]
     public static extern uint GetCurrentThreadId();
 
