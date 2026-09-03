@@ -1,0 +1,11 @@
+[2026-09-03 19:12:57.482] AutoLang Agent 0.1.0 (pid 17960)
+[2026-09-03 19:12:57.642] layouts available: Hebrew, English
+[2026-09-03 19:16:05.099] switched to Hebrew in 23ms (ConversationMemory, conf 1.00)
+[2026-09-03 19:16:05.099] decision 3dc978db: Switch lang=Hebrew src=ConversationMemory conf=1.00 | memory=Hebrew layout=English composer=empty foreground=yes | mine=0[he=0 en=0] theirs=9[he=88 en=459] keys=2
+[2026-09-03 19:16:07.284] switched to English in 14ms (ConversationMemory, conf 1.00)
+[2026-09-03 19:16:07.285] decision 3dc978db: Switch lang=English src=ConversationMemory conf=1.00 | memory=English layout=Hebrew composer=empty foreground=yes | mine=0[he=0 en=0] theirs=9[he=88 en=459] keys=2
+[2026-09-03 19:17:06.032] decision 3dc978db: Suppressed blocker=UserTyping lang=Unknown src=None conf=0.00 | memory=Hebrew layout=English composer=typing foreground=yes | mine=0[he=0 en=0] theirs=9[he=88 en=459] keys=7
+[2026-09-03 19:17:37.123] decision 3dc978db: Suppressed blocker=UserTyping lang=Unknown src=None conf=0.00 | memory=English layout=Hebrew composer=typing foreground=yes | mine=0[he=0 en=0] theirs=9[he=88 en=459] keys=7
+[2026-09-03 19:17:37.945] decision 3dc978db: Suppressed blocker=UserTyping lang=Unknown src=None conf=0.00 | memory=Hebrew layout=Hebrew composer=typing foreground=yes | mine=0[he=0 en=0] theirs=9[he=88 en=459] keys=7
+[2026-09-03 19:18:01.000] switch to Hebrew failed: LAYOUT_NOT_INSTALLED
+[2026-09-03 19:18:02.000] ignoring stale signal, age 1400ms

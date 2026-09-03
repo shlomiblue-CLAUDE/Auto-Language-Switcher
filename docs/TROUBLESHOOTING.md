@@ -188,3 +188,24 @@ Useful to include, and all safe to share:
 - `agent.log` from a `--verbose` run
 
 None of these contain message text, contact names or phone numbers.
+
+---
+
+## Is it behaving? Ask the log
+
+Start the Agent with logging, use WhatsApp normally, then:
+
+```powershell
+.\tools\review-log.ps1
+```
+
+It looks for the two failure shapes that a passing test suite missed, because both are about what
+the product learns over time rather than what it decides once: one conversation switched to a
+different language within seconds, and one conversation whose remembered language changed more than
+once. It also reports failed switches and discarded stale signals.
+
+Two switches a second apart are not a fault when they are two different conversations, which is why
+it compares per conversation rather than by time alone.
+
+It is checked against `tests/fixtures/agent-log-with-defects.txt`, a log carrying both signatures —
+a green report from a detector that has never gone red is not evidence of anything.
