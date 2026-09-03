@@ -118,6 +118,38 @@ Watch for:
 
 Task Manager, Details tab, watch `AutoLang.exe`.
 
+Start the Agent with logging first, so the run leaves evidence rather than an impression:
+
+```powershell
+Get-Process AutoLang | Stop-Process -Force
+& "$env:LOCALAPPDATA\Programs\AutoLang\AutoLang.exe" --verbose
+```
+
+Afterwards:
+
+```powershell
+type %LOCALAPPDATA%\AutoLang\agent.log
+type %LOCALAPPDATA%\AutoLang\conversations.json
+```
+
+Expected: one entry per conversation used, each a 32-character hash carrying the language actually
+typed there. Anything less is a real defect in conversation memory — PDR section 5 puts it second
+in the priority order, above the message evidence itself.
+
+### Read this from an ordinary shell
+
+Do not inspect the store from a sandboxed or automated shell. It can be handed a private copy of
+these files, exactly as it is handed a private copy of the registry, and the copy is stale.
+
+That produced a false alarm during Manual B: the store appeared to hold a single conversation, and
+that one was `9f2a4c8e1b3d5f7009f2a4c8e1b3d5f7`, the fixture `tools/bridge-smoke-test.mjs` sends. It
+looked like nothing real was being learned. Read through a process outside the sandbox, the same
+store held six real conversations with the right languages, and the log showed the switches that
+produced them at 11–21ms each.
+
+The lesson is the one `tools/verify-registration.ps1` exists for: a file read is not evidence unless
+you know which process's view you are reading.
+
 ---
 
 ## Manual D — Edge in the foreground ✅ done 2026-09-03
@@ -153,8 +185,8 @@ Fill in when run. An empty row is more useful than an assumed one.
 | Privacy audit | 2026-09-03 | PASS, 1 skipped | Store empty; stored-data check did not run |
 | Bridge smoke test (5) | 2026-09-03 | PASS | Against the installed build |
 | Manual A — selectors | 2026-09-03 | FAIL, then PASS | Direction was dead; adapter v2.0.0 resolves 19/19 live, 0 disagreements |
-| Manual B — network | | | |
-| Manual C — 30 switches | | | |
+| Manual B — network | 2026-09-03 | PASS | Zero requests in the service worker Network panel across several conversation switches. On disk: 3 files, no message text, the one stored key is 32 hex characters |
+| Manual C — 30 switches | | | Partial evidence already: 6 conversations learned, switches at 11–21ms, confidence 1.00 |
 | Manual D — Edge foreground | 2026-09-03 | PASS | 7/8, 15–25ms; real switch applied by the shipped binary |
 
 ---

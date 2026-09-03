@@ -128,6 +128,16 @@ const storeDir = join(process.env.LOCALAPPDATA ?? join(homedir(), 'AppData/Local
 
 const storeFiles = existsSync(storeDir) ? walk(storeDir) : [];
 
+// Which files were read is part of the result, not decoration. A sandboxed or packaged shell can be
+// handed a private copy of this directory, and the copy is stale: during one acceptance run it
+// showed a single conversation - the smoke test's fixture - while the real store held six. An audit
+// that reports "3 files scanned" without saying which three invites exactly that mistake.
+console.log(`  ....  reading ${storeDir}`);
+console.log(`  ....  ${storeFiles.length} file(s): ${storeFiles.map((f) => f.split(/[\\/]/).pop()).join(', ') || 'none'}`);
+if (storeFiles.length > 0) {
+  console.log('  ....  if this shell is sandboxed, that may be a private copy — check from an ordinary shell');
+}
+
 if (storeFiles.length === 0) {
   skip(
     'stored data audited',
