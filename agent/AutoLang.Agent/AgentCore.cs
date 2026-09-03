@@ -30,6 +30,10 @@ public sealed class AgentCore
     private readonly IKeyboardLayoutService _layouts;
     private readonly IClock _clock;
     private readonly Action<string> _log;
+
+    /// <summary>Diagnostic only, and reset with the process. Salted hashes, never raw identifiers.</summary>
+    private readonly HashSet<string> _conversationKeysSeen = [];
+    private string? _lastConversationKey;
     private readonly object _gate = new();
 
     private DecisionMessage? _lastDecision;
@@ -130,6 +134,21 @@ public sealed class AgentCore
             });
         }
 
+        // Identity churn, measured rather than inferred.
+        //
+        // Thirty switches between two conversations produced fourteen stored keys, which means the
+        // same chat is being handed a new identity on most visits and every preference learned for
+        // it is orphaned at once. Counting distinct keys against the number of conversations the
+        // user actually opened is the cheapest way to see that happening live, and the eight-
+        // character prefix of an already-salted hash identifies nothing.
+        if (signal.ConversationKey != _lastConversationKey)
+        {
+            var seenBefore = !_conversationKeysSeen.Add(signal.ConversationKey);
+            _log($"conversation {signal.ConversationKey[..8]} ({(seenBefore ? "known" : "new")}), " +
+                 $"{_conversationKeysSeen.Count} distinct this session");
+            _lastConversationKey = signal.ConversationKey;
+        }
+
         var observedAt = DateTimeOffset.FromUnixTimeMilliseconds(signal.ObservedAt);
         var now = _clock.Now;
 
@@ -185,6 +204,17 @@ public sealed class AgentCore
 
     private string? HandleHealth(HealthMessage health)
     {
+        // Which fallback tier matched is the one diagnostic that says where conversation identity
+        // is being read from, and it was already arriving here unlogged. Tier 0 is the preferred
+        // selector; a high tier for conversationTitle means the title is being taken from
+        // something coarse - at the last tier, the whole header, presence text included - which is
+        // how one conversation can mint a new identity every time the other person starts typing.
+        if (health.Tiers.Count > 0)
+        {
+            var tiers = string.Join(", ", health.Tiers.OrderBy(t => t.Key).Select(t => $"{t.Key}={t.Value}"));
+            _log($"adapter tiers on {health.Site} v{health.AdapterVersion}: {tiers}");
+        }
+
         if (!health.Healthy)
         {
             _log($"adapter unhealthy on {health.Site} v{health.AdapterVersion}: missing [{string.Join(", ", health.Missing)}]");
