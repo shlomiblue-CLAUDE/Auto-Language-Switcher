@@ -129,7 +129,8 @@ becomes  { "Hebrew": 9 }</pre>
     <li><strong>No network requests.</strong> No analytics, no telemetry, no update check, no error reporting. The extension holds no network permission and the code contains no HTTP client.</li>
     <li><strong>No account.</strong> Nothing to sign up for or sign in to.</li>
     <li><strong>No AI or cloud language service.</strong> Detection is a letter count against Unicode ranges, done locally.</li>
-    <li><strong>No other sites.</strong> Access is requested for <code>web.whatsapp.com</code> only. Other tabs are unreadable, and any future site would need a permission you approve.</li>
+    <li><strong>No site you did not choose.</strong> Installing grants access to <code>web.whatsapp.com</code> and nothing else. Any other site is added by you from a button in the popup — one site, or all sites if you would rather not be asked again — and can be withdrawn the same way, which stops it reading immediately rather than at the next reload.</li>
+    <li><strong>No password or payment fields.</strong> On any site, password boxes, payment-card fields and one-time-code fields are excluded outright. They are not read, not counted, and produce no signal of any kind.</li>
     <li><strong>No third parties.</strong> Nothing is shared, sold or disclosed, because nothing is collected.</li>
   </ul>
 
@@ -138,10 +139,16 @@ becomes  { "Hebrew": 9 }</pre>
     <tr><th>Permission</th><th>Why it is needed</th></tr>
     <tr><td><code>storage</code></td><td>Holds the random value used for hashing. Nothing else.</td></tr>
     <tr><td><code>nativeMessaging</code></td><td>Talks to the Windows program. A browser extension cannot change a keyboard layout; only a native program can.</td></tr>
-    <tr><td><code>web.whatsapp.com</code></td><td>Reads the conversation you have open.</td></tr>
+    <tr><td><code>web.whatsapp.com</code></td><td>Reads the conversation you have open. The only site granted when you install.</td></tr>
+    <tr><td><code>scripting</code></td><td>Starts the same bundled script on a site you have allowed, and stops it when you withdraw that site. No remote or generated code is ever run.</td></tr>
+    <tr><td><code>activeTab</code></td><td>Lets the popup name the site you are on, so it can offer to enable it there. Limited to the tab in front, and only while the popup is open — unlike the <code>tabs</code> permission, which would expose every tab.</td></tr>
+    <tr><td>Any other site</td><td><strong>Optional, and off until you click.</strong> Granted per site, or for all sites, from the popup. On a site you allow, it identifies the box you are typing in and counts letters by alphabet. Chrome will not grant either form without your click, and the popup always shows which state you are in.</td></tr>
   </table>
   <p>
-    <code>&lt;all_urls&gt;</code> is deliberately not requested.
+    <code>&lt;all_urls&gt;</code> is deliberately not requested, and no broad pattern is requested at
+    install time. A release check enforces that: broad access has to sit in the optional list, where
+    it means "the user may grant this", never in the required list, where installing would grant it
+    silently.
   </p>
 
   <h2>Checking it yourself</h2>

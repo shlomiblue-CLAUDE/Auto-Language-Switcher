@@ -236,8 +236,17 @@ public sealed class AgentCore
             return $"he={list.Sum(m => m.Stats.Of(Language.Hebrew))} en={list.Sum(m => m.Stats.Of(Language.English))}";
         }
 
+        // The site, because a decision that does not say where it came from cannot be read. Once
+        // the product ran on one site this was obvious from context; now that any site the user
+        // allows can produce a decision, a log of hashed keys and letter counts gives no way to
+        // tell a mail client from a chat window. Twice during diagnosis the only way to separate
+        // them was the shape of the evidence, which is a guess dressed as a reading.
+        //
+        // A hostname, never a URL: a path can carry a search term, a document title or a token,
+        // and none of those belong in a file this product promises holds nothing identifying.
         _log(
-            $"decision {signal.ConversationKey[..8]}: {decision.Outcome}{blocker} " +
+            $"decision {signal.ConversationKey[..8]} on {(string.IsNullOrEmpty(signal.Site) ? "?" : signal.Site)}: " +
+            $"{decision.Outcome}{blocker} " +
             $"lang={decision.Language} src={decision.Source} conf={decision.Confidence:F2} " +
             $"| memory={memory}{pin} layout={request.CurrentLayout} " +
             $"composer={(request.ComposerEmpty ? "empty" : "typing")} " +

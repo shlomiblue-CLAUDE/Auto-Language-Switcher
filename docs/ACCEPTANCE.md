@@ -208,6 +208,49 @@ diagnostic code. A keyboard switcher that grabs focus would be worse than the pr
 
 ---
 
+## Manual E — an ordinary site
+
+The generic adapter has no selectors to break, so nothing here is about parsing. What cannot be
+proven from a fixture is that the permission model behaves the way the listing says it does, and
+that a page nobody has looked at does not cost CPU.
+
+Rows 1–8 on a site that is not WhatsApp — Gmail is a good one, because it has a compose
+box and a search box on the same page.
+
+| # | Do this | Expected |
+|---|---|---|
+| 1 | Open the site before allowing it. Popup → "This site" | Says it is not being watched. Nothing in the service worker console |
+| 2 | Click **Use on this site**, accept Chrome's prompt | Starts working in the tab that is already open, with no reload |
+| 3 | Type Hebrew in the compose box. Go to another tab and come back | Layout returns to Hebrew on focus |
+| 4 | Type English in the search box on the same page | It remembers English there, and Hebrew still in compose |
+| 5 | Focus a password field on any login page | Nothing in the log. No decision, no key, no signal at all |
+| 6 | Click **Stop using this site** | The log goes quiet for that site immediately, without reloading the tab |
+| 7 | Reload the page after revoking | Still quiet |
+| 8 | Hold a key down in a text box for a few seconds | One decision in the log, not one per character |
+| 9 | Click **Use on all sites**, accept | Any site works with no further asking, including ones never visited before |
+| 10 | With all sites on, open WhatsApp | **One** decision per conversation change in the log, not two |
+| 11 | Click **Stop using all sites** | Back to per-site. Sites granted individually before are unaffected |
+
+Row 10 is the one that would go unnoticed. The all-hosts pattern covers WhatsApp too, so the
+declared content script and the dynamically registered one can both run in the same page —
+two observers, every signal sent twice, and the engine taught the same thing twice. The
+registration excludes the declared match to prevent it, and the log is where a failure shows.
+
+Row 8 is the one worth being suspicious about. Typing is an event per character, and every signal
+that carries a learned layout is a write to `conversations.json`; the log is where a filter that
+silently stopped working would show up as a wall of identical lines.
+
+Read the evidence, not the impression:
+
+```powershell
+.\tools\review-log.ps1 -Isolated
+```
+
+And CPU, which is the same unmeasured question as manual C, now spread across every site the user
+allows rather than one: Task Manager, Details, `AutoLang.exe`, with a few granted tabs open.
+
+---
+
 ## Results
 
 Fill in when run. An empty row is more useful than an assumed one.
@@ -221,6 +264,7 @@ Fill in when run. An empty row is more useful than an assumed one.
 | Manual B — network | 2026-09-03 | PASS | Zero requests in the service worker Network panel across several conversation switches. On disk: 3 files, no message text, the one stored key is 32 hex characters |
 | Manual C — 30 switches | 2026-09-03 | FAIL, then PASS | Found two real defects. After both: no flip-flop across a session, switches 11–19ms, three evidence sources, zero failed switches. CPU and memory not observed |
 | Manual D — Edge foreground | 2026-09-03 | PASS | 7/8, 15–25ms; real switch applied by the shipped binary |
+| Manual E — an ordinary site | | | Eleven rows above, including the all-sites grant. Not run |
 
 ---
 

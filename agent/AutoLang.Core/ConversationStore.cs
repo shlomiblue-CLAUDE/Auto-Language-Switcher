@@ -127,8 +127,35 @@ public sealed class ConversationStore
         {
             var existing = _conversations.GetValueOrDefault(conversationKey) ?? new ConversationPreference();
             _conversations[conversationKey] = mutate(existing);
+            DropExpired();
             Write(ConversationsPath, _conversations);
         }
+    }
+
+    /// <summary>
+    /// Forgets what the engine has already stopped believing.
+    ///
+    /// Nothing here changes a decision: past <see cref="Settings.MemoryTtl"/> the engine ignores a
+    /// remembered language and reads the conversation afresh, so these entries are already inert.
+    /// What this stops is the file growing forever.
+    ///
+    /// That mattered little when a key was a chat. It matters now that a key is one document in a
+    /// site - a single mail thread, a single document - because a heavy mail user opens thousands
+    /// of them, and every one would otherwise be kept for good.
+    ///
+    /// A pinned conversation is never dropped, however old. The TTL exists because an observation
+    /// goes stale; a pin is an instruction, and the user is entitled to expect it to hold.
+    /// </summary>
+    private void DropExpired()
+    {
+        var cutoff = _clock.Now - _settings.MemoryTtl;
+
+        var stale = _conversations
+            .Where(entry => entry.Value.Mode == ConversationMode.Auto && entry.Value.UpdatedAt < cutoff)
+            .Select(entry => entry.Key)
+            .ToList();
+
+        foreach (var key in stale) _conversations.Remove(key);
     }
 
     // --- Debug buffer ------------------------------------------------------------------------

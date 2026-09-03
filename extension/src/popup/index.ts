@@ -83,6 +83,28 @@ const SOURCES: Record<string, string> = {
 let conversationKey: string | null = null;
 let site: string | null = null;
 
+/**
+ * The match pattern for the tab in front, or null when there is nothing grantable there.
+ *
+ * Computed during refresh and kept here because `permissions.request` has to be called straight
+ * out of the click handler. Awaiting anything first spends the user gesture, and Chrome then
+ * rejects the request without showing a prompt.
+ */
+let sitePattern: string | null = null;
+
+/** Granted at install time, so the popup must not offer to withdraw it. */
+const DECLARED_HOSTS = new Set(['web.whatsapp.com']);
+
+/**
+ * The one pattern that covers everything, and the way out of approving sites one at a time.
+ *
+ * It has to match `optional_host_permissions` in the manifest exactly, or Chrome refuses the
+ * request outright. Offering it here rather than declaring it as required is the whole point: the
+ * install prompt stays limited to WhatsApp Web, and this stays a decision the user makes, once,
+ * with Chrome's own dialog in front of them.
+ */
+const ALL_SITES = '*://*/*';
+
 async function activeTab(): Promise<chrome.tabs.Tab | null> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab ?? null;
@@ -178,6 +200,97 @@ function describe(state: AgentState, decision: AgentState['lastDecision']): stri
   return REASONS[decision.blocker ?? 'None'] ?? '—';
 }
 
+/**
+ * Whether this product is allowed to watch the site in front, and the control to change that.
+ *
+ * Deliberately worded as watching rather than access. "Read and change all your data" is Chrome's
+ * phrase for the permission, and it is technically true and completely misleading about what
+ * happens here: the page is read to count letters, and the counts are the only thing that leaves.
+ */
+async function renderSiteAccess(tab: chrome.tabs.Tab | null): Promise<void> {
+  const panel = $('site-access-panel');
+  const button = $<HTMLButtonElement>('site-access');
+  const detail = $('site-access-detail');
+  const allSites = $<HTMLButtonElement>('all-sites');
+
+  const everywhere = await chrome.permissions.contains({ origins: [ALL_SITES] });
+
+  allSites.hidden = false;
+  allSites.disabled = false;
+  allSites.setAttribute('aria-pressed', String(everywhere));
+  allSites.textContent = everywhere ? 'Stop using all sites' : 'Use on all sites';
+
+  // With everything granted there is nothing left for the per-site button to do, and leaving it
+  // there implying otherwise would be a lie about what clicking it achieves.
+  if (everywhere) {
+    sitePattern = null;
+    panel.hidden = false;
+    button.hidden = true;
+    detail.textContent = 'Every site is enabled. It still only reads the box you are typing in.';
+    return;
+  }
+
+  let url: URL | null = null;
+  try {
+    url = tab?.url ? new URL(tab.url) : null;
+  } catch {
+    url = null;
+  }
+
+  sitePattern = null;
+
+  if (!tab) {
+    panel.hidden = true;
+    return;
+  }
+
+  /**
+   * A tab whose address we cannot read.
+   *
+   * This is deliberately shown rather than hidden, because hiding it is what went wrong. Chrome
+   * withholds `tab.url` from an extension that has neither a host permission for the page nor
+   * `activeTab` - which is precisely the state every not-yet-granted site is in. The panel
+   * silently disappeared on exactly the sites whose whole purpose was to offer this button, and
+   * from the outside that is indistinguishable from the feature not existing.
+   *
+   * `activeTab` is now requested, so this should not happen. If it ever does, it says so.
+   */
+  if (!url) {
+    panel.hidden = false;
+    button.hidden = true;
+    detail.textContent = 'Cannot read this tab’s address, so it cannot be offered here.';
+    return;
+  }
+
+  // Extension pages, chrome:// and the new tab page. No extension may run there, so offering a
+  // button that could only fail would be worse than saying nothing.
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    panel.hidden = false;
+    button.hidden = true;
+    detail.textContent = 'Extensions cannot run on this kind of page.';
+    return;
+  }
+
+  panel.hidden = false;
+  sitePattern = `${url.protocol}//${url.hostname}/*`;
+
+  if (DECLARED_HOSTS.has(url.hostname)) {
+    detail.textContent = `${url.hostname} works out of the box.`;
+    button.hidden = true;
+    return;
+  }
+
+  const granted = await chrome.permissions.contains({ origins: [sitePattern] });
+
+  button.hidden = false;
+  button.disabled = false;
+  button.setAttribute('aria-pressed', String(granted));
+  button.textContent = granted ? 'Stop using this site' : 'Use on this site';
+  detail.textContent = granted
+    ? `Watching ${url.hostname}. Only letter counts ever leave the page.`
+    : `Not watching ${url.hostname} yet.`;
+}
+
 async function refresh(): Promise<void> {
   const tab = await activeTab();
   site = tab?.url ? new URL(tab.url).hostname : null;
@@ -207,10 +320,14 @@ async function refresh(): Promise<void> {
 
   if (!reply || reply.type === 'error') {
     renderDisconnected(error ?? (reply as { message?: string } | null)?.message ?? null);
-    return;
+  } else {
+    render(reply);
   }
 
-  render(reply);
+  // Last, because renderDisconnected disables every button on the page. Granting a site is still
+  // a reasonable thing to do while the Agent is down - it is the browser's decision, not the
+  // Agent's - so this control re-enables itself afterwards.
+  await renderSiteAccess(tab);
 }
 
 async function send(payload: Record<string, unknown>): Promise<void> {
@@ -225,6 +342,37 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('.mode')) {
     void send({ command: 'setMode', conversationKey, mode: button.dataset.mode });
   });
 }
+
+$('site-access').addEventListener('click', () => {
+  const pattern = sitePattern;
+  if (!pattern) return;
+
+  const granted = $('site-access').getAttribute('aria-pressed') === 'true';
+
+  // Called without an await in front of it, on purpose. Chrome only shows the permission prompt
+  // while the click is still being handled.
+  //
+  // And nothing important is hung off the result: Chrome closes this popup to show the prompt, so
+  // the code after the request may never run at all. Starting on the tabs that are already open is
+  // the service worker's job, driven by permissions.onAdded, which fires either way.
+  const change = granted
+    ? chrome.permissions.remove({ origins: [pattern] })
+    : chrome.permissions.request({ origins: [pattern] });
+
+  void change.then(() => refresh()).catch(() => refresh());
+});
+
+$('all-sites').addEventListener('click', () => {
+  const granted = $('all-sites').getAttribute('aria-pressed') === 'true';
+
+  // Requested straight from the click for the same reason as the per-site button: Chrome shows
+  // the prompt only while the gesture is live, and closes this popup to do it.
+  const change = granted
+    ? chrome.permissions.remove({ origins: [ALL_SITES] })
+    : chrome.permissions.request({ origins: [ALL_SITES] });
+
+  void change.then(() => refresh()).catch(() => refresh());
+});
 
 $('pause-site').addEventListener('click', () => {
   if (!site) return;

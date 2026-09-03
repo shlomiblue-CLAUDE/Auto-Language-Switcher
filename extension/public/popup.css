@@ -126,6 +126,16 @@ button[disabled] { opacity: .5; cursor: not-allowed; }
 
 .wide { width: 100%; }
 
+/* Two stacked full-width buttons need air between them, or they read as one control. */
+.wide + .wide { margin-top: 6px; }
+
+/* The secondary of a pair: available, but not the thing to reach for first. It keeps the accent
+   treatment when pressed, because that is the state and the state has to stay legible. */
+.subtle:not([aria-pressed="true"]) {
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .foot {
   display: flex;
   align-items: center;

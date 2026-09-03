@@ -66,6 +66,19 @@
       </div>
     </section>
 
+    <!-- Per-site access. The extension is installed with permission for one site and nothing
+         else, so everywhere the user wants it has to be turned on here, one origin at a time.
+         Chrome requires the grant to come from a click, which is why it lives in the popup. -->
+    <section id="site-access-panel" class="panel" hidden>
+      <h2>This site</h2>
+      <p id="site-access-detail" class="detail"></p>
+      <button type="button" id="site-access" class="wide" aria-pressed="false">Use on this site</button>
+      <!-- The way out of approving each site in turn. Still a grant the user makes by clicking,
+           not something the install takes: the manifest offers it, Chrome asks, and it can be
+           withdrawn from this same button. -->
+      <button type="button" id="all-sites" class="wide subtle" aria-pressed="false">Use on all sites</button>
+    </section>
+
     <section class="panel">
       <button type="button" id="pause-site" class="wide" aria-pressed="false">Pause on this site</button>
     </section>

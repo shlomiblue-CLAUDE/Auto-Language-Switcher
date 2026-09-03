@@ -7,10 +7,15 @@
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1KFtysD6G7EXH14kxXkFdS0Oi4P64IUjERV7pzZfsv77jHNGCr0956A5oVhmgEP2qfiJIEZwb3MGdzsJ5oA0xXBLQmwjFBrq/svs938T7446hzFg2m1+q3KM6YWJwR7fmywtAUrSvEDDt3YQcxL4MUqpp2lgoMwxFsyU2y5R9FmZ/QaZe7oWf2mzr60ahk+YSPSic4ojjkPNelZxdPS6Vnoj10wnRf0gN0cKADtMX6Z/YQi0rXFjVwkb3T3ceFra/oMYWqKtgf7m54WmsP3OjofYJgy8pzUGDOEv/n89sFA+So9y+kFttRcmtWEru5YTqZMdptFxPHk7pDe1A8ScXwIDAQAB",
   "permissions": [
     "storage",
-    "nativeMessaging"
+    "nativeMessaging",
+    "scripting",
+    "activeTab"
   ],
   "host_permissions": [
     "https://web.whatsapp.com/*"
+  ],
+  "optional_host_permissions": [
+    "*://*/*"
   ],
   "background": {
     "service_worker": "background.js",

@@ -1,4 +1,5 @@
 import { WhatsAppAdapter } from '../adapters/whatsapp/adapter.js';
+import { GenericAdapter } from '../adapters/generic/adapter.js';
 import type { SiteAdapter } from '../adapters/site-adapter.js';
 import { getSalt, hashConversationId } from '../shared/hash.js';
 import {
@@ -34,7 +35,36 @@ const HEALTH_INTERVAL_MS = 30_000;
  */
 export function isContextInvalidated(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /Extension context (?:invalidated|was invalidated)/i.test(message);
+
+  return (
+    /Extension context (?:invalidated|was invalidated)/i.test(message) ||
+    // The other shape it takes, and the one that got through. Chrome does not always leave a
+    // `chrome.runtime` behind that throws a named error - sometimes it removes the object, and the
+    // next call fails as an ordinary TypeError with no mention of the extension at all. Reading
+    // only for the message above meant those were treated as a transient fault: the observer kept
+    // running against a dead runtime and warned every 100ms, forever, which is the exact failure
+    // this function was written to end.
+    // Both wordings V8 has used for the same thing. They differ in structure, not just phrasing,
+    // so one pattern cannot cover them and a browser update could bring either back.
+    /Cannot read properties of undefined \(reading '(?:sendMessage|connect|id|getURL)'\)/i.test(message) ||
+    /Cannot read property '(?:sendMessage|connect|id|getURL)' of undefined/i.test(message) ||
+    /chrome\.runtime is undefined/i.test(message)
+  );
+}
+
+/**
+ * True when this script has been cut off from the extension.
+ *
+ * Asked before acting rather than after failing. `chrome.runtime.id` is defined in a live content
+ * script and undefined the moment the extension is reloaded, so this is the difference between
+ * noticing quietly and throwing first.
+ */
+function runtimeGone(): boolean {
+  try {
+    return typeof chrome === 'undefined' || chrome.runtime?.id === undefined;
+  } catch {
+    return true;
+  }
 }
 
 export class ContentObserver {
@@ -47,8 +77,30 @@ export class ContentObserver {
   private lastHealthSent = 0;
   private lastHealthy: boolean | null = null;
 
+  /**
+   * What the last signal said, so a keystroke that changes nothing sends nothing.
+   *
+   * Only typing is filtered this way. Every signal the Agent receives that carries a learned
+   * layout is a write to the conversation store, and typing fires an event per character: without
+   * this, holding down a key would rewrite the store ten times a second and fill the log with
+   * identical decisions. What the Agent actually needs from typing is the two transitions - the
+   * box became non-empty, the box became empty again - and both survive this filter.
+   *
+   * Focus, visibility and DOM mutations are never filtered. Returning to a tab is the moment the
+   * user is about to type and the page may well look identical to when they left, yet the Agent's
+   * answer can differ: it reads the foreground window and the live layout itself, and neither is
+   * visible from here.
+   */
+  private lastSignalFingerprint: string | null = null;
+
+  /** Set when the pending read was scheduled by a keystroke. */
+  private pendingReadIsTyping = false;
+
   /** Set once the extension is reloaded. There is no recovery, so it is never cleared. */
   private orphaned = false;
+
+  /** Set by stop(), including when the service worker says this site is no longer allowed. */
+  private stopped = false;
 
   constructor(adapter: SiteAdapter) {
     this.adapter = adapter;
@@ -68,10 +120,26 @@ export class ContentObserver {
       if (document.visibilityState === 'visible') this.schedule();
     });
 
+    // Typing is the only evidence about the user's keyboard that is not an inference, so it has to
+    // be observed - but see lastSignalFingerprint for why it is the one trigger that is filtered.
+    // On a site with no adapter of its own this is also the only way the composer is ever seen to
+    // fill or empty, since nothing here watches the DOM.
+    document.addEventListener('input', () => this.schedule({ typing: true }), { passive: true });
+
     this.schedule();
   }
 
+  /**
+   * Stops for good.
+   *
+   * The flag matters as much as the teardown. Disconnecting the observer and clearing the timers
+   * leaves the focus, visibility and input listeners on the document, and any one of them would
+   * schedule another read - so without this, "stop" only meant "stop until the user clicks
+   * something". Re-granting a site takes effect on the next page load, which is when Chrome
+   * injects a fresh script.
+   */
   stop(): void {
+    this.stopped = true;
     this.observer?.disconnect();
     this.observer = null;
     if (this.rootRecheckTimer !== null) window.clearInterval(this.rootRecheckTimer);
@@ -98,8 +166,16 @@ export class ContentObserver {
     this.schedule();
   }
 
-  private schedule(): void {
-    if (this.orphaned) return;
+  private schedule(options: { typing?: boolean } = {}): void {
+    if (this.orphaned || this.stopped) return;
+
+    // A read that any non-typing trigger asked for stays unfiltered even if a keystroke lands in
+    // the same debounce window. The cheap filter must never be able to swallow the expensive
+    // signal.
+    this.pendingReadIsTyping = this.debounceTimer === null
+      ? options.typing === true
+      : this.pendingReadIsTyping && options.typing === true;
+
     if (this.debounceTimer !== null) window.clearTimeout(this.debounceTimer);
 
     this.debounceTimer = window.setTimeout(() => {
@@ -133,7 +209,17 @@ export class ContentObserver {
 
   private async read(): Promise<void> {
     this.debounceTimer = null;
+    const typing = this.pendingReadIsTyping;
+    this.pendingReadIsTyping = false;
     if (this.orphaned) return;
+
+    // Checked here, before anything is read, because the first thing a read touches is
+    // chrome.storage for the salt. Discovering the loss by throwing works, but it throws once per
+    // scheduled read until something notices, and this notices on the first one.
+    if (runtimeGone()) {
+      this.handleFailure(new Error('Extension context invalidated.'));
+      return;
+    }
 
     const health = this.adapter.checkHealth();
     this.maybeReportHealth(health.healthy, health.missing, health.tiers);
@@ -164,6 +250,14 @@ export class ContentObserver {
     };
 
     this.lastConversationKey = conversationKey;
+
+    // Everything the Agent's answer can turn on that is visible from this page. The layout in use
+    // and the foreground window are deliberately absent: the Agent reads both itself, which is why
+    // only a keystroke-triggered read may be filtered on this.
+    const fingerprint = JSON.stringify([conversationKey, reading.composerEmpty, reading.messages]);
+    if (typing && fingerprint === this.lastSignalFingerprint) return;
+
+    this.lastSignalFingerprint = fingerprint;
     this.send(signal);
   }
 
@@ -194,13 +288,26 @@ export class ContentObserver {
   }
 
   private send(message: OutboundMessage): void {
+    if (runtimeGone()) {
+      this.handleFailure(new Error('Extension context invalidated.'));
+      return;
+    }
+
     // A sleeping service worker is ordinary and not worth surfacing. An invalidated context is
     // different in kind: it never recovers, so swallowing it here left the observer running
     // against a dead runtime.
     try {
-      chrome.runtime.sendMessage(message).catch((error: unknown) => {
-        if (isContextInvalidated(error)) this.handleFailure(error);
-      });
+      chrome.runtime
+        .sendMessage(message)
+        .then((reply: { stop?: boolean } | undefined) => {
+          // The service worker is the only side that knows which sites the user still allows.
+          // Chrome leaves an injected script running after its permission is withdrawn, so being
+          // told to stop is the only way this page learns that it is no longer welcome.
+          if (reply?.stop) this.stop();
+        })
+        .catch((error: unknown) => {
+          if (isContextInvalidated(error)) this.handleFailure(error);
+        });
     } catch (error) {
       this.handleFailure(error);
     }
@@ -212,9 +319,26 @@ export class ContentObserver {
   }
 }
 
-const adapter = new WhatsAppAdapter();
+/**
+ * Ordered, most specific first.
+ *
+ * A site with an adapter of its own gets it: WhatsApp has a conversation to read, and reading it
+ * beats anything that can be inferred from a text box. GenericAdapter matches everything, so it is
+ * both the fallback and the reason this list is ordered rather than searched.
+ */
+export const ADAPTERS: readonly SiteAdapter[] = [new WhatsAppAdapter(), new GenericAdapter()];
 
-if (adapter.matches(window.location)) {
+const adapter = ADAPTERS.find((candidate) => candidate.matches(window.location));
+
+/**
+ * Guarded because GenericAdapter matches every page, so this bootstrap now runs wherever the
+ * module is loaded rather than only on WhatsApp. In a content script `chrome.runtime` is always
+ * there; anywhere else - a test importing ContentObserver, a bundling step - it is not, and
+ * starting an observer that cannot reach the service worker would only produce noise.
+ */
+const runtimeAvailable = typeof chrome !== 'undefined' && chrome?.runtime?.id !== undefined;
+
+if (adapter && runtimeAvailable) {
   const observer = new ContentObserver(adapter);
   observer.start();
 

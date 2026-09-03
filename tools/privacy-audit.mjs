@@ -86,20 +86,53 @@ if (!existsSync(distDir)) {
 
   const manifest = JSON.parse(readFileSync(join(distDir, 'manifest.json'), 'utf8'));
 
-  const allowedPermissions = ['storage', 'nativeMessaging'];
+  // scripting is here because the product now runs on any site the user allows, and a dynamic
+  // content script registration is what keeps that opt-in: the alternative is declaring every
+  // site up front, which is the thing this audit exists to prevent.
+  const allowedPermissions = ['storage', 'nativeMessaging', 'scripting', 'activeTab'];
   const extra = (manifest.permissions ?? []).filter((p) => !allowedPermissions.includes(p));
-  if (extra.length === 0) pass('permissions are the documented two', allowedPermissions.join(', '));
-  else fail('permissions are the documented two', `unexpected: ${extra.join(', ')}`);
+  if (extra.length === 0) pass('permissions are the documented four', allowedPermissions.join(', '));
+  else fail('permissions are the documented four', `unexpected: ${extra.join(', ')}`);
 
+  // The check that matters most on this page. Broad access is offered, never taken: it belongs in
+  // optional_host_permissions, where Chrome will not grant it without the user clicking, and never
+  // in host_permissions, where installing would grant it silently.
   const hosts = manifest.host_permissions ?? [];
   if (hosts.length === 1 && hosts[0] === 'https://web.whatsapp.com/*') {
-    pass('one host permission', hosts[0]);
+    pass('one host permission is granted at install', hosts[0]);
   } else {
-    fail('one host permission', `got: ${JSON.stringify(hosts)}`);
+    fail('one host permission is granted at install', `got: ${JSON.stringify(hosts)}`);
   }
 
-  if (!JSON.stringify(manifest).includes('<all_urls>')) pass('<all_urls> is not requested');
+  const broad = /<all_urls>|\*:\/\/\*\/\*|https?:\/\/\*\/\*/;
+  const requiredBroad = hosts.filter((h) => broad.test(h));
+  if (requiredBroad.length === 0) pass('no broad host pattern is required at install');
+  else fail('no broad host pattern is required at install', `required: ${requiredBroad.join(', ')}`);
+
+  const optional = manifest.optional_host_permissions ?? [];
+  if (optional.length > 0) {
+    pass('every other site is opt-in', optional.join(', '));
+  } else {
+    fail('every other site is opt-in', 'optional_host_permissions is missing, so no site can be added');
+  }
+
+  if (!JSON.stringify(manifest.permissions ?? []).includes('<all_urls>')) pass('<all_urls> is not requested');
   else fail('<all_urls> is not requested', 'the manifest asks for it');
+
+  // A guard whose absence is silent. Running on arbitrary sites means running on pages with a
+  // password box, and the generic adapter refuses to read those - but nothing about the product
+  // would look wrong if that refusal were deleted, so the shipped bundle is asked to prove it is
+  // still there.
+  const sensitiveGuard = ['password', 'one-time-code', 'cc-'];
+  const missingGuard = sensitiveGuard.filter((needle) => !source.includes(needle));
+  if (missingGuard.length === 0) {
+    pass('the bundle still refuses password and payment fields', sensitiveGuard.join(', '));
+  } else {
+    fail(
+      'the bundle still refuses password and payment fields',
+      `the generic adapter no longer mentions: ${missingGuard.join(', ')}`,
+    );
+  }
 
   if (manifest.key) pass('manifest carries its signing key', 'extension id stays stable');
   else fail('manifest carries its signing key', 'without it the store assigns a different id and the native host allowlist stops matching');

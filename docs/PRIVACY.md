@@ -89,9 +89,13 @@ key or for counts, so it cannot be extended into one by accident.
 - **No account.** Nothing to sign up for, nothing to sign in to.
 - **No AI or external language service.** Language detection is a letter count against Unicode
   ranges, done locally in under a millisecond.
-- **No access to other sites.** The extension requests `https://web.whatsapp.com/*` and nothing
-  else. It cannot read any other tab, and adding a site would require a new permission you would
-  be asked to approve.
+- **No site you did not choose.** Installing grants `https://web.whatsapp.com/*` and nothing else.
+  Every other site is added by you from the popup — one origin at a time, or all sites at once if
+  you prefer — through Chrome's own permission prompt. Withdrawing one stops the extension reading that site straight away — the
+  service worker refuses signals from an origin that is no longer granted and tells the page to
+  stop, rather than waiting for you to reload the tab.
+- **No password or payment fields.** On every site, `input[type=password]`, payment-card fields and
+  one-time-code fields are excluded before anything is read. No identity, no counts, no signal.
 
 ## Permissions, and why each one exists
 
@@ -99,9 +103,15 @@ key or for counts, so it cannot be extended into one by accident.
 |---|---|
 | `storage` | Holds the random salt used for hashing. Nothing else. |
 | `nativeMessaging` | Talks to the Windows agent. A browser extension cannot change a keyboard layout; only a native program can. |
-| `https://web.whatsapp.com/*` | Reads the open conversation. The only site requested. |
+| `https://web.whatsapp.com/*` | Reads the open conversation. The only site granted at install. |
+| `scripting` | Runs the same bundled script on a site you allowed, and stops it when you withdraw the site. No remote or generated code. |
+| `activeTab` | Lets the popup name the site you are on, so it can offer to enable it. Limited to the tab in front, only while the popup is open. The `tabs` permission would have exposed every tab's address instead. |
+| `optional_host_permissions: *://*/*` | **Offered, never taken.** Chrome grants an origin from this list only when you click, so installing grants none of it. |
 
-`<all_urls>` is deliberately not requested, and each additional site will be added explicitly.
+`<all_urls>` is deliberately not requested. The distinction that matters is which manifest field
+broad access sits in: in `optional_host_permissions` it means "the user may grant this", in
+`host_permissions` it would be granted silently at install. `tools/privacy-audit.mjs` fails the
+build if a broad pattern ever appears in the required list.
 
 ## Checking any of this yourself
 

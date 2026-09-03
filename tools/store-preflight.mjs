@@ -98,16 +98,16 @@ if (manifest.manifest_version !== 3) {
   pass('manifest v3');
 }
 
-const allowedPermissions = new Set(['storage', 'nativeMessaging']);
+const allowedPermissions = new Set(['storage', 'nativeMessaging', 'scripting', 'activeTab']);
 const extraPermissions = (manifest.permissions ?? []).filter((p) => !allowedPermissions.has(p));
 
 if (extraPermissions.length > 0) {
   fail(
-    'permissions are the two that were justified',
-    `Also requests ${extraPermissions.join(', ')}. Anything beyond storage and nativeMessaging needs\n        its own justification in docs/STORE_LISTING.md before it ships.`,
+    'permissions are the four that were justified',
+    `Also requests ${extraPermissions.join(', ')}. Anything beyond storage, nativeMessaging, scripting and activeTab needs\n        its own justification in docs/STORE_LISTING.md before it ships.`,
   );
 } else {
-  pass('permissions are the two that were justified', (manifest.permissions ?? []).join(', '));
+  pass('permissions are the four that were justified', (manifest.permissions ?? []).join(', '));
 }
 
 const hosts = manifest.host_permissions ?? [];
@@ -115,11 +115,27 @@ const expectedHosts = ['https://web.whatsapp.com/*'];
 
 if (JSON.stringify(hosts) !== JSON.stringify(expectedHosts)) {
   fail(
-    'host access is WhatsApp Web only',
-    `Requests ${JSON.stringify(hosts)}. Broad host access turns a single-purpose review into a long one.`,
+    'host access granted at install is WhatsApp Web only',
+    `Requests ${JSON.stringify(hosts)}. Broad host access turns a single-purpose review into a long one,
+        and it belongs in optional_host_permissions where the user grants it per site.`,
   );
 } else {
-  pass('host access is WhatsApp Web only');
+  pass('host access granted at install is WhatsApp Web only');
+}
+
+// Broad access is the product working everywhere the user writes; it is only acceptable because
+// Chrome will not grant it without a click. Declared in the wrong field it would be granted
+// silently at install, which is the same manifest change with the opposite meaning.
+const optionalHosts = manifest.optional_host_permissions ?? [];
+
+if (optionalHosts.length === 0) {
+  fail(
+    'other sites are offered as optional',
+    'optional_host_permissions is empty, so the popup cannot grant any site and the product ' +
+      'only works on WhatsApp Web.',
+  );
+} else {
+  pass('other sites are offered as optional', optionalHosts.join(', '));
 }
 
 // --- Assets ------------------------------------------------------------------------------------

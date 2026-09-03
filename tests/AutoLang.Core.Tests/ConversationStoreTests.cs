@@ -280,4 +280,40 @@ public class ConversationStoreTests : IDisposable
         Assert.DoesNotContain("@c.us", everything);
         Assert.Contains("9f2a4c8e1b3d5f70", everything);
     }
+
+    [Fact]
+    public void A_remembered_language_the_engine_has_stopped_believing_is_dropped()
+    {
+        // Conversation identity used to be a chat. It is now one document inside a site - a single
+        // mail thread - because all of Gmail sharing one memory made the product answer with
+        // whatever had been typed last, in every thread, forever. That fix multiplies the number
+        // of keys a heavy mail user produces, so the file has to stop growing somewhere.
+        //
+        // Nothing here changes a decision: past the TTL the engine already ignores a remembered
+        // language and reads the conversation afresh. These entries are inert before they are gone.
+        _store.RememberLanguage("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Language.Hebrew);
+
+        _clock.Advance(_store.Settings.MemoryTtl + TimeSpan.FromDays(1));
+
+        // Any write is enough; the sweep rides along with the next one rather than needing a timer.
+        _store.RememberLanguage("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Language.English);
+
+        Assert.Null(_store.GetConversation("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        Assert.Null(Reopen().GetConversation("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        Assert.Equal(Language.English, _store.GetConversation("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")!.LastReliableLanguage);
+    }
+
+    [Fact]
+    public void A_pin_outlives_the_memory_it_was_set_alongside()
+    {
+        // The TTL exists because an observation goes stale. A pin is not an observation - it is an
+        // instruction, and a user who pinned a conversation to Hebrew is entitled to find it still
+        // pinned, however long they were away.
+        _store.SetMode("cccccccccccccccccccccccccccccccc", ConversationMode.AlwaysHebrew);
+
+        _clock.Advance(_store.Settings.MemoryTtl * 3);
+        _store.RememberLanguage("dddddddddddddddddddddddddddddddd", Language.English);
+
+        Assert.Equal(ConversationMode.AlwaysHebrew, Reopen().GetConversation("cccccccccccccccccccccccccccccccc")!.Mode);
+    }
 }
