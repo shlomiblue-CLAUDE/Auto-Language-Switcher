@@ -168,6 +168,12 @@ if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path (Join-Path $root 'extension\dist\*') -DestinationPath $zipPath
 Write-Host "wrote $zipPath"
 
+# Checks what the store will reject and, more usefully, what it will accept and then break for
+# every user. Chief among those is the manifest key: recomputed here into an extension id and
+# compared with the id the installer puts in the native host allowlist, because the two are
+# constants in two different languages and nothing else notices when they stop agreeing.
+Invoke-Native node @((Join-Path $root 'tools\store-preflight.mjs')) 'Store preflight failed. Do not upload this package.'
+
 # Inno Setup is optional. It is not fetched automatically: a build script that silently downloads
 # an installer compiler is worse than one that says what is missing.
 $iscc = Get-Command iscc -ErrorAction SilentlyContinue

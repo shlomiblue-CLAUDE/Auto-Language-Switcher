@@ -151,17 +151,35 @@ conversations — a privacy claim undercut by its own screenshots is worse than 
 
 ## Before submitting
 
+`.\build.ps1` now runs `tools/store-preflight.mjs` and fails the build on anything mechanical:
+
+```
+node tools/store-preflight.mjs
+```
+
+| Checked for you | |
+|---|---|
+| `key` present, and the ID it derives | recomputed from the key the way Chrome does |
+| That ID matches the native host allowlist | compared against `$ExtensionId` in `Install.ps1` |
+| Manifest v3 | |
+| Permissions still only `storage` + `nativeMessaging` | anything else needs a justification above |
+| Host access still WhatsApp Web only | |
+| Declared icons exist at their declared pixel sizes | read from the PNG header, not the filename |
+| No `.map` or `.ts` files in the package | |
+| `extension.zip` is not older than the build | the quiet way to ship yesterday's version |
+
+**The `key` field is the one that would have bitten.** Remove it and the store assigns a different
+extension ID, the native host allowlist stops matching, and every install fails with
+"agent not running" — while the extension itself looks perfectly healthy. That is why the preflight
+derives the ID rather than comparing two hardcoded strings.
+
+Still yours:
+
 - [ ] Privacy policy live at a public URL
 - [ ] `version` bumped in `extension/public/manifest.json`
-- [ ] `manifest.json` retains its `key`, so the published ID matches the native host allowlist
-- [ ] `.\build.ps1` clean, all tests passing
 - [ ] Selectors verified against live WhatsApp (`tools/whatsapp-selector-probe.js`)
 - [ ] Screenshots taken from a test account
 - [ ] Companion program downloadable from a public URL, linked in the description
-
-**The `key` field is the one that will bite.** Remove it and the store assigns a different
-extension ID, the native host allowlist stops matching, and every install fails with
-"agent not running" — while the extension itself looks perfectly healthy.
 
 ---
 
