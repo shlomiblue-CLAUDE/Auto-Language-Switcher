@@ -88,7 +88,21 @@ $manifest = [ordered]@{
     allowed_origins = @("chrome-extension://$ExtensionId/")
 }
 
-$manifest | ConvertTo-Json -Depth 4 | Out-File -FilePath $manifestPath -Encoding utf8 -Force
+# Written without a byte order mark, deliberately.
+#
+# Chrome's JSON parser rejects a manifest that starts with one, and then reports the host as
+# "Specified native messaging host not found" - an error that points at the registry while the
+# actual fault is three bytes at the front of this file. Out-File -Encoding utf8 in Windows
+# PowerShell 5.1 writes a BOM, which is exactly how that happened once already.
+$json = $manifest | ConvertTo-Json -Depth 4
+[System.IO.File]::WriteAllText($manifestPath, $json, (New-Object System.Text.UTF8Encoding $false))
+
+# Read back and check, because a silent BOM breaks the whole product while every other part of
+# the install reports success.
+$firstBytes = [System.IO.File]::ReadAllBytes($manifestPath)[0..2]
+if ($firstBytes[0] -eq 0xEF -and $firstBytes[1] -eq 0xBB -and $firstBytes[2] -eq 0xBF) {
+    throw "The host manifest was written with a byte order mark. Chrome would reject it."
+}
 Write-Host "wrote    $manifestPath"
 
 foreach ($browser in 'Google\Chrome', 'Microsoft\Edge') {

@@ -27,7 +27,23 @@ Three things have to agree — the registry value, the manifest file, and the ex
 it. When they disagree, Chrome reports a disconnect that names none of them. Re-running
 `Install.ps1` rewrites all three from one source.
 
-**The most common cause is the extension id.** The agent's allowlist names one id exactly. Open
+### "Specified native messaging host not found", while the registry looks correct
+
+Check the manifest for a byte order mark. Chrome's JSON parser rejects a file that begins with one
+and then reports the host as missing — an error that sends you looking at the registry while the
+fault is three bytes at the front of a file.
+
+```powershell
+$m = "$env:LOCALAPPDATA\Programs\AutoLang\com.autolang.bridge.json"
+$b = [System.IO.File]::ReadAllBytes($m)
+"has BOM: " + ($b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF)
+```
+
+Re-running `Install.ps1` rewrites it correctly, and both installer scripts now read the file back
+and refuse to finish if a BOM appears. Windows PowerShell 5.1's `Out-File -Encoding utf8` writes
+one, which is how this happened in the first place.
+
+**The next most common cause is the extension id.** The agent's allowlist names one id exactly. Open
 `chrome://extensions` and check yours reads `iblcjhakhfggopgijnankilmifbjbdbp`. If it does not, the
 extension was built without its signing key and every connection is refused by design.
 
