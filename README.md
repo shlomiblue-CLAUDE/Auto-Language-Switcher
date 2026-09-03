@@ -84,9 +84,10 @@ origin Chrome passes in argv.
 ```
 
 ```bash
-dotnet test                                    # 177 C# tests
+dotnet test                                    # 201 C# tests
 cd extension && npm test && npx tsc --noEmit   # 49 TypeScript tests
-node tools/bridge-smoke-test.mjs               # 4 checks across three processes
+node tools/bridge-smoke-test.mjs               # 5 checks across three processes
+node tools/privacy-audit.mjs                    # the release privacy gate
 ```
 
 The letter counter exists twice, in C# and TypeScript, because privacy requires the browser to
@@ -109,5 +110,6 @@ Hebrew and English ship today. Adding Russian or Arabic is one row in
 ## Documentation
 
 [Install](docs/INSTALL_WINDOWS.md) · [Privacy](docs/PRIVACY.md) ·
-[Troubleshooting](docs/TROUBLESHOOTING.md) · [Phase 0 spike results](docs/SPIKE_RESULTS.md) ·
+[Troubleshooting](docs/TROUBLESHOOTING.md) · [Acceptance](docs/ACCEPTANCE.md) ·
+[Phase 0 spike results](docs/SPIKE_RESULTS.md) ·
 [Store listing](docs/STORE_LISTING.md)
