@@ -149,6 +149,14 @@ if ($Configuration -eq 'Release') {
     Get-ChildItem $agentOut -Filter *.pdb | Remove-Item -Force
 }
 
+# --- Privacy audit ------------------------------------------------------------------------------
+
+# Runs against the built bundle rather than the source tree, because the bundle is what users run
+# and it is generated. Exits non-zero on a failure, so a leak stops the build here rather than
+# being discovered by someone reading a privacy policy that is no longer true.
+Step 'Privacy audit'
+Invoke-Native node @((Join-Path $root 'tools\privacy-audit.mjs')) 'Privacy audit failed. Do not release.'
+
 # --- Extension package ------------------------------------------------------------------------
 
 Step 'Package'
