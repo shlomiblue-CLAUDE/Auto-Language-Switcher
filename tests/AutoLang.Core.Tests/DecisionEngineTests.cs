@@ -115,6 +115,59 @@ public class DecisionEngineTests
     }
 
     [Fact]
+    public void Typing_in_a_layout_we_just_imposed_teaches_nothing()
+    {
+        // The product must not learn from its own output. Without this it confirms whatever it
+        // guessed: it switches, the user starts typing, the guard records the layout the product
+        // itself set, and that guess becomes the conversation's remembered language - after which
+        // memory outranks the messages and the mistake is permanent.
+        //
+        // A real session showed one conversation's memory flipping Hebrew, English, Hebrew inside
+        // thirty seconds along this path.
+        var switched = Decide(Request([Outgoing(Language.Hebrew, 30)], currentLayout: Language.English));
+        Assert.Equal(DecisionOutcome.Switch, switched.Outcome);
+        Assert.Equal(Language.Hebrew, switched.Language);
+
+        // The user now types, and the layout in use is the one we just set.
+        var typing = Decide(Request(composerEmpty: false, currentLayout: Language.Hebrew));
+
+        Assert.Equal(DecisionBlocker.UserTyping, typing.Blocker);
+        Assert.Equal(Language.Unknown, typing.LearnedLanguage);
+    }
+
+    [Fact]
+    public void Typing_in_a_layout_the_user_chose_still_teaches()
+    {
+        // The other side of the rule, and the reason it is safe. A user who disagrees with a
+        // switch changes the layout themselves; the layout in use is then no longer ours, and the
+        // very next keystroke is learned normally.
+        var switched = Decide(Request([Outgoing(Language.Hebrew, 30)], currentLayout: Language.English));
+        Assert.Equal(Language.Hebrew, switched.Language);
+
+        // They disagree and set English back by hand, then type.
+        var typing = Decide(Request(composerEmpty: false, currentLayout: Language.English));
+
+        Assert.Equal(DecisionBlocker.UserTyping, typing.Blocker);
+        Assert.Equal(Language.English, typing.LearnedLanguage);
+    }
+
+    [Fact]
+    public void A_noted_manual_change_hands_the_layout_back_to_the_user()
+    {
+        // NoteManualChange is how the Agent reports that the user took over. After it, even the
+        // language we had set counts as theirs again - otherwise a user who switches back and
+        // forth ends up in a conversation the product refuses to learn anything about.
+        var switched = Decide(Request([Outgoing(Language.Hebrew, 30)], currentLayout: Language.English));
+        Assert.Equal(Language.Hebrew, switched.Language);
+
+        _engine.NoteManualChange(Language.Hebrew);
+
+        var typing = Decide(Request(composerEmpty: false, currentLayout: Language.Hebrew));
+
+        Assert.Equal(Language.Hebrew, typing.LearnedLanguage);
+    }
+
+    [Fact]
     public void Typing_guard_beats_a_manual_pin_too()
     {
         var decision = Decide(

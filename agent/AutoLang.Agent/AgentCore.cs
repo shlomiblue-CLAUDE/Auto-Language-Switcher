@@ -274,6 +274,14 @@ public sealed class AgentCore
 
     private string? HandleCommand(CommandMessage command)
     {
+        // Commands change behaviour and left no trace, which made one log unreadable: a pin
+        // appeared on a conversation and was gone four seconds later, and nothing recorded whether
+        // the user had cleared it or the product had lost it. Those need different fixes.
+        var target = command.ConversationKey is { Length: >= 8 } k ? $" on {k[..8]}" : "";
+        _log($"command {command.Command}{target}" +
+             (command.Mode is { } m ? $" mode={m}" : "") +
+             (command.LanguageTag is { } t ? $" lang={t}" : ""));
+
         lock (_gate)
         {
             switch (command.Command)

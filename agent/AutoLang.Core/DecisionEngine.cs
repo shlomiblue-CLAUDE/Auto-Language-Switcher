@@ -19,6 +19,13 @@ public sealed class DecisionEngine
     private DateTimeOffset _lastSwitchAt = DateTimeOffset.MinValue;
     private Language _lastSwitchLanguage = Language.Unknown;
 
+    /// <summary>
+    /// The layout this engine put in place and that the user has not touched since.
+    ///
+    /// Exists to stop the product learning from itself. See the typing guard below.
+    /// </summary>
+    private Language _layoutWeImposed = Language.Unknown;
+
     public DecisionEngine(IClock? clock = null, LanguageDetector? detector = null)
     {
         _clock = clock ?? SystemClock.Instance;
@@ -51,11 +58,22 @@ public sealed class DecisionEngine
             // The user is typing right now, with a layout we can read. That is the strongest
             // evidence there is about how they write in this conversation - stronger than parsing
             // their sent words - so the guard that blocks the switch also records the truth.
+            //
+            // Unless the layout is our own. If we set it and the user has not touched it since,
+            // then "the layout in use while they type" is our last guess, not their choice, and
+            // recording it teaches the product what it already believed. One wrong switch then
+            // becomes permanent, and a log of a real session showed a single conversation's
+            // memory flipping Hebrew, English, Hebrew inside thirty seconds on exactly this path.
+            //
+            // A user who disagrees with a switch fixes it themselves, which clears this, and the
+            // very next keystroke is learned normally. Nothing is lost but the echo.
+            var layoutIsOurOwnGuess = request.CurrentLayout == _layoutWeImposed;
+
             return new Decision
             {
                 Outcome = DecisionOutcome.Suppressed,
                 Blocker = DecisionBlocker.UserTyping,
-                LearnedLanguage = request.CurrentLayout,
+                LearnedLanguage = layoutIsOurOwnGuess ? Language.Unknown : request.CurrentLayout,
             };
         }
 
@@ -102,6 +120,7 @@ public sealed class DecisionEngine
 
         _lastSwitchAt = now;
         _lastSwitchLanguage = language;
+        _layoutWeImposed = language;
 
         return new Decision
         {
@@ -219,6 +238,10 @@ public sealed class DecisionEngine
     {
         _lastSwitchAt = _clock.Now;
         _lastSwitchLanguage = language;
+
+        // The layout is theirs again, so the typing guard may learn from it. This is the release
+        // valve that keeps the anti-echo rule above from freezing a conversation on a wrong guess.
+        _layoutWeImposed = Language.Unknown;
     }
 
     public Language LastSwitchLanguage => _lastSwitchLanguage;
