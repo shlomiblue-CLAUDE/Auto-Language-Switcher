@@ -70,8 +70,10 @@ describe('ContentObserver when the extension is reloaded', () => {
     observer = new ContentObserver(fakeAdapter());
     observer.start();
 
-    // First read reaches sendMessage, which rejects with the invalidation.
-    await vi.advanceTimersByTimeAsync(200);
+    // Long enough for the first read to finish completely. A shorter wait captured the count
+    // mid-read, between the health send and the signal send, and the second one then looked like
+    // the observer had carried on.
+    await vi.advanceTimersByTimeAsync(2_000);
     const callsAfterFirst = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.length;
     expect(callsAfterFirst).toBeGreaterThan(0);
 

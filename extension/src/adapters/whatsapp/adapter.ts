@@ -116,6 +116,18 @@ export class WhatsAppAdapter implements SiteAdapter {
       if (tier === -1 && spec.required) missing.push(spec.name);
     }
 
+    // With no conversation open there is nothing to recognise, and reporting "WhatsApp layout not
+    // recognized" then is simply wrong - it blames WhatsApp for the landing screen. read() has
+    // always treated this as an ordinary state; health has to agree, or the popup accuses the page
+    // of having changed every time no chat is selected.
+    //
+    // The chat list is what separates the two. On the landing screen it is present and the
+    // conversation panel is not. If neither is there, something really has changed, and saying so
+    // is the whole point of this check.
+    if (resolve(SELECTORS.mainPanel).element === null && this.isLandingScreen()) {
+      return { healthy: true, missing: [], tiers };
+    }
+
     // Structure is not comprehension.
     //
     // The previous adapter matched every selector it looked for and still understood nothing,
@@ -127,6 +139,19 @@ export class WhatsAppAdapter implements SiteAdapter {
     }
 
     return { healthy: missing.length === 0, missing, tiers };
+  }
+
+  /**
+   * True when WhatsApp is loaded with no conversation selected.
+   *
+   * Verified against the live page: the chat list is a grid of rows, not the list items an older
+   * version of these selectors expected.
+   */
+  private isLandingScreen(): boolean {
+    return (
+      document.querySelector('#pane-side') !== null ||
+      document.querySelector('[role="grid"] [role="row"]') !== null
+    );
   }
 
   /** How direction was determined across the visible messages. Diagnostic, and a health input. */

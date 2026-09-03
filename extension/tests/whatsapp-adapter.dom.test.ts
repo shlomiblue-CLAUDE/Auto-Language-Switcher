@@ -285,7 +285,19 @@ describe('WhatsAppAdapter', () => {
       expect(health.missing).toContain('messageDirection');
     });
 
+    it('is healthy on the landing screen, where no conversation is open', () => {
+      // The chat list is present and the conversation panel is not. Reporting the layout as
+      // unrecognised here blames WhatsApp for the user simply not having picked a chat.
+      document.body.innerHTML = '<div id="pane-side"><div role="grid"><div role="row"></div></div></div>';
+
+      const health = adapter.checkHealth();
+
+      expect(health.healthy).toBe(true);
+      expect(health.missing).toHaveLength(0);
+    });
+
     it('reports missing required selectors when the layout is unrecognised', () => {
+      // Neither a conversation panel nor a chat list: something really has changed.
       document.body.innerHTML = '<div><p>something else entirely</p></div>';
 
       const health = adapter.checkHealth();

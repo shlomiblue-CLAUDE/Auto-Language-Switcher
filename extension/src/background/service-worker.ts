@@ -52,10 +52,13 @@ class AgentConnection {
     return this.lastReply;
   }
 
-  private connect(): chrome.runtime.Port | null {
+  private connect(force = false): chrome.runtime.Port | null {
     if (this.port) return this.port;
 
-    if (Date.now() < this.nextAttemptAt) return null;
+    // The backoff exists so a broken install is not hammered, but the popup opening is a direct
+    // request from the user. Making them wait out a 30 second window - and showing them the error
+    // from before they fixed something - is the opposite of helpful.
+    if (!force && Date.now() < this.nextAttemptAt) return null;
 
     try {
       const port = chrome.runtime.connectNative(HOST_NAME);
@@ -122,8 +125,8 @@ class AgentConnection {
   }
 
   /** Request and reply, for the popup. Resolves null when the Agent cannot be reached. */
-  request(message: unknown, timeoutMs = 2_000): Promise<AgentReply | null> {
-    const port = this.connect();
+  request(message: unknown, timeoutMs = 2_000, force = false): Promise<AgentReply | null> {
+    const port = this.connect(force);
     if (!port) return Promise.resolve(null);
 
     return new Promise((resolve) => {
@@ -239,7 +242,8 @@ chrome.runtime.onMessage.addListener((message: OutboundMessage, _sender, sendRes
 
   if (request.type === 'agent-request') {
     const { payload } = message as unknown as { payload: unknown };
-    void agent.request(payload).then((reply) =>
+    // force: opening the popup is an explicit ask, so it always retries.
+    void agent.request(payload, 2_000, true).then((reply) =>
       sendResponse({ ok: reply !== null, reply, connected: agent.connected, error: agent.error }),
     );
     return true;

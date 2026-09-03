@@ -145,6 +145,11 @@ export class ContentObserver {
     const salt = await getSalt();
     const conversationKey = await hashConversationId(reading.rawConversationId, salt);
 
+    // Re-checked after the awaits. The context can be torn down while this read is suspended -
+    // the health send earlier in this same call is often what discovers it - and sending into a
+    // dead runtime afterwards produces exactly the rejection this whole path exists to stop.
+    if (this.orphaned) return;
+
     // Nothing derived from rawConversationId survives past this point.
     const signal: ConversationSignal = {
       type: 'signal',
