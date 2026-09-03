@@ -296,15 +296,29 @@ describe('WhatsAppAdapter', () => {
       expect(health.missing).toHaveLength(0);
     });
 
-    it('reports missing required selectors when the layout is unrecognised', () => {
-      // Neither a conversation panel nor a chat list: something really has changed.
+    it('says only that it is not signed in when there is no conversation and no chat list', () => {
+      // Neither a conversation panel nor a chat list. That is the sign-in screen or a redesign,
+      // and nothing on the page separates the two - so the adapter must not claim it is the rare
+      // one. Listing mainPanel and composer as missing reads as "WhatsApp changed", which is what
+      // the popup then told a user who was merely looking at the QR code.
       document.body.innerHTML = '<div><p>something else entirely</p></div>';
 
       const health = adapter.checkHealth();
 
       expect(health.healthy).toBe(false);
-      expect(health.missing).toContain('mainPanel');
+      expect(health.missing).toEqual(['signedIn']);
+    });
+
+    it('still blames WhatsApp when a conversation is open and the page is unreadable', () => {
+      // The distinction that keeps the sign-in state from swallowing real regressions: with a
+      // conversation panel on screen, a missing composer is a genuine structural failure.
+      document.body.innerHTML = '<div id="main"><div><p>no composer, no messages</p></div></div>';
+
+      const health = adapter.checkHealth();
+
+      expect(health.healthy).toBe(false);
       expect(health.missing).toContain('composer');
+      expect(health.missing).not.toContain('signedIn');
     });
 
     it('reports which tier matched, as an early warning of drift', () => {

@@ -188,7 +188,13 @@ async function refresh(): Promise<void> {
 
     // An adapter that has lost the page is a different failure from an absent Agent, and the two
     // need different actions from the user, so they get different panels.
-    $('adapter-broken').hidden = content ? content.health.healthy : true;
+    //
+    // Being signed out is a third thing again, and by far the most likely of the three. It looks
+    // identical to a redesign from inside the page, so it gets a panel that says only what is
+    // known rather than one that blames WhatsApp for a page the user simply has not signed in to.
+    const signedOut = content?.health.missing.includes('signedIn') ?? false;
+    $('adapter-signed-out').hidden = !signedOut;
+    $('adapter-broken').hidden = content ? content.health.healthy || signedOut : true;
   }
 
   const { reply, error } = await askAgent({
