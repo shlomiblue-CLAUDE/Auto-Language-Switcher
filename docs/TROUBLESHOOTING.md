@@ -29,7 +29,40 @@ it. When they disagree, Chrome reports a disconnect that names none of them. Re-
 
 ### "Specified native messaging host not found", while the registry looks correct
 
-Check the manifest for a byte order mark. Chrome's JSON parser rejects a file that begins with one
+**Check this one first if the install was run by anything other than you, at a PowerShell window you
+opened yourself.** An agent, a CI step, a packaged (MSIX) host or a sandboxed shell can have its
+registry writes virtualised: the value goes into a private view, the writing process reads it
+straight back and sees it there, and every other process on the machine — the browser included —
+finds nothing at that path.
+
+Nothing observable from inside the installing shell tells the two apart. `reg query` prints the key.
+`Get-ItemProperty` returns the value. Reading through `HKEY_USERS\<SID>` instead of `HKCU` returns
+the same virtualised view, and `GetCurrentPackageFullName` reports no package identity. The only
+question that separates them is whether a *different* process can see the value:
+
+```powershell
+.\tools\verify-registration.ps1
+```
+
+It reads the registration through a process started outside this one and says plainly whether a
+browser would find the host. A clean install performed this way is worth the habit:
+
+```powershell
+.\installer\Install.ps1 -Verify
+```
+
+If it reports the registration missing, re-run the installer from an ordinary PowerShell window
+opened from the Start menu. Nothing is wrong with the product; the registration simply never reached
+the real hive.
+
+This cost a full debugging session once. The manifest was valid, byte-order-mark free and pointed at
+a file that existed; the registry key was present with the right default value; no enterprise policy
+was set; the host name matched in the bundle, the manifest and the key; fourteen browser variants
+were registered. Chrome still said the host was missing, and it was right.
+
+---
+
+The next cause is a byte order mark in the manifest. Chrome's JSON parser rejects a file that begins with one
 and then reports the host as missing — an error that sends you looking at the registry while the
 fault is three bytes at the front of a file.
 

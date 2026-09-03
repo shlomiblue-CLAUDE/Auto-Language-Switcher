@@ -23,15 +23,25 @@
 .PARAMETER NoAutostart
     Skip the sign-in entry. The Agent still starts on demand when the browser first needs it.
 
+.PARAMETER Verify
+    After installing, confirm from a separate process that the registration is actually visible.
+
+    Worth the extra seconds whenever this script is run by anything other than a person at an
+    ordinary PowerShell prompt. A sandboxed or packaged shell can have its registry writes
+    virtualised, in which case everything here reports success while the browser sees no
+    registration at all. Nothing observable from inside this process distinguishes the two.
+
 .EXAMPLE
     .\Install.ps1
     .\Install.ps1 -Source "C:\Downloads\AutoLang"
+    .\Install.ps1 -Verify
 #>
 
 [CmdletBinding()]
 param(
     [string] $Source,
-    [switch] $NoAutostart
+    [switch] $NoAutostart,
+    [switch] $Verify
 )
 
 $ErrorActionPreference = 'Stop'
@@ -182,6 +192,22 @@ Start-Sleep -Milliseconds 800
 
 $started = Get-Process AutoLang -ErrorAction SilentlyContinue
 Write-Host ("started  {0}" -f $(if ($started) { "Agent (pid $($started.Id))" } else { 'FAILED - the Agent did not stay running' }))
+
+# --- Was any of that real? ---------------------------------------------------------------------
+
+if ($Verify) {
+    Write-Host ''
+    $verifier = Join-Path $scriptDir '..\tools\verify-registration.ps1'
+    if (Test-Path $verifier) {
+        & $verifier -HostName $HostName -ExtensionId $ExtensionId
+        # 2 means the check could not be performed, which is not evidence of a broken install.
+        if ($LASTEXITCODE -eq 1) {
+            throw 'The registration is not visible outside this process. The install did not take effect.'
+        }
+    } else {
+        Write-Host "skipped  verification (tools\verify-registration.ps1 not found beside the installer)"
+    }
+}
 
 Write-Host @"
 

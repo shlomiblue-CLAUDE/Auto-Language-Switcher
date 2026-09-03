@@ -49,6 +49,18 @@ product can work around it.
 .\installer\Install.ps1
 ```
 
+Run it from a PowerShell window you opened yourself. If anything else runs it — an agent, a CI step,
+a packaged or sandboxed shell — add `-Verify`:
+
+```powershell
+.\installer\Install.ps1 -Verify
+```
+
+Those environments can have their registry writes virtualised, so the registration lands where the
+browser will never look while every check inside the installer reports success. `-Verify` reads the
+result back through a separate process and fails loudly instead. See
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
 ### What it does
 
 Everything is per-user. No administrator rights are needed, and nothing is changed for other
