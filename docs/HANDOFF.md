@@ -293,8 +293,22 @@ what `DecisionRequest.CanReadContext` is for. Three existing tests failed the mo
 in without the qualifier, and each was right: on a web page, finding no evidence **is** evidence.
 
 **A limit worth knowing before investigating it again:** some applications never change their
-window title. Claude's is `Claude`, with no conversation in it, so every conversation there is one
-context. That is the application's doing, not a defect, and no amount of work here changes it.
+window title, so every conversation inside them is one context. Measured, not assumed:
+
+| Application | Window title | What that gives |
+|---|---|---|
+| Claude | `Claude` | one context for the whole application |
+| WhatsApp desktop | `WhatsApp` on the frame, `(10) WhatsApp` on its WebView | one context; the number is an unread count and would mint a new one per message |
+
+This is the application's doing and there is no version of this product that fixes it. The chat name
+lives in the interface, not the title, and reaching it means reading the window's contents — the one
+thing the privacy audit fails the build over. Using the WebView's title instead is worse, not
+better: the unread counter changes constantly.
+
+**For WhatsApp, say so plainly: use WhatsApp Web.** The browser adapter reads the chat title from
+the DOM, remembers per conversation, and analyses the messages. The desktop application can only
+ever offer less, and a user reporting "it does not work in WhatsApp" is most likely describing this
+rather than a fault.
 
 **The anti-echo guard was global and had to be scoped.** It stops a conversation confirming its own
 guess, but the layout it compared against was single state on an engine shared by every

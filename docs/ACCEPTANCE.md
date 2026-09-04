@@ -392,9 +392,14 @@ F16 and F22 are the two that matter most, because they are the claims made to a 
 conveniences. F21 is the one that would go unnoticed: it was broken when first written, and a live
 log showed the same line once a second for as long as somebody sat in a window.
 
-**A limit rather than a failure.** Some applications never change their window title — Claude's is
-`Claude`, with no conversation in it — so F19 cannot be run there and every conversation in that
-application is one context. Choose an application whose title moves, and record which one was used.
+**A limit rather than a failure.** Some applications never change their window title, so F19 cannot
+be run in them and every conversation inside them is one context. Measured on two: Claude reports
+`Claude`, and WhatsApp desktop reports `WhatsApp` on its frame and `(10) WhatsApp` on its WebView —
+an unread count, which would mint a new context per message rather than per chat.
+
+Choose an application whose title moves, and record which one was used. For WhatsApp the answer is
+not a better application to test with: it is that WhatsApp Web, in the browser, does this properly
+and the desktop app cannot.
 
 ### What this run found
 
