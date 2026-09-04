@@ -108,6 +108,47 @@ public class DesktopWindowTests : IDisposable
     }
 
     [Fact]
+    public void One_applications_guess_does_not_stop_another_from_learning()
+    {
+        // Straight from a live log. The user had Hebrew set in WhatsApp; the engine had put Hebrew
+        // into Claude a minute earlier; and WhatsApp came back `NoSignal`, unable to learn the
+        // language sitting in front of it.
+        //
+        // The anti-echo rule is about a conversation confirming its own guess, but the layout it
+        // guarded was single state on an engine shared by every conversation - so one application's
+        // guess made that language look like ours everywhere.
+        _store.AllowApp("claude");
+        _store.AllowApp("whatsapp.root");
+
+        // Claude learns Hebrew and the engine then imposes it there.
+        _layouts.Window = new ForegroundWindow(new IntPtr(4), "claude", "Claude");
+        _layouts.Current = Language.Hebrew;
+        _core.ObserveWindow("claude", "Claude");
+
+        // Through another window, and observed there. Changing the layout without an observation in
+        // between makes the engine read it as a manual change in the window it thinks it is still
+        // in - which is a modelling error in the test, not a defect, and one worth stating because
+        // it is easy to write three times.
+        _store.AllowApp("code");
+        _layouts.Window = new ForegroundWindow(new IntPtr(5), "code", "x");
+        _core.ObserveWindow("code", "x");
+        _layouts.Current = Language.English;
+        _core.ObserveWindow("code", "x");
+        _clock.Advance(TimeSpan.FromMinutes(6));
+
+        _layouts.Window = new ForegroundWindow(new IntPtr(4), "claude", "Claude");
+        _core.ObserveWindow("claude", "Claude");
+        Assert.Equal(Language.Hebrew, _layouts.Current);
+
+        // Now a different application, with Hebrew in front of it and nothing remembered.
+        _layouts.Window = new ForegroundWindow(new IntPtr(6), "whatsapp.root", "WhatsApp");
+        _core.ObserveWindow("whatsapp.root", "WhatsApp");
+
+        var key = DesktopIdentity.ForWindow(_store.Settings.DesktopSalt, "whatsapp.root", "WhatsApp");
+        Assert.Equal(Language.Hebrew, _store.GetConversation(key)?.LastReliableLanguage ?? Language.Unknown);
+    }
+
+    [Fact]
     public void What_the_product_itself_set_is_never_learned_back()
     {
         // The other half, and the reason the rule above is safe. Learning the layout in use would

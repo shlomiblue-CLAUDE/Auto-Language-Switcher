@@ -20,11 +20,23 @@ public sealed class DecisionEngine
     private Language _lastSwitchLanguage = Language.Unknown;
 
     /// <summary>
-    /// The layout this engine put in place and that the user has not touched since.
+    /// The layout this engine put in place, and the conversation it put it there for.
     ///
     /// Exists to stop the product learning from itself. See the typing guard below.
+    ///
+    /// The conversation half was missing and it mattered: this is single state on an engine shared
+    /// by every conversation, so imposing Hebrew in one made Hebrew look like our own guess
+    /// *everywhere*. A live log caught it on the desktop source - the user had Hebrew set in
+    /// WhatsApp, the engine had put Hebrew into Claude a minute earlier, and WhatsApp was therefore
+    /// unable to learn the language sitting in front of it. The rule is about a conversation
+    /// confirming its own guess, so it has to know which conversation.
     /// </summary>
     private Language _layoutWeImposed = Language.Unknown;
+    private string? _imposedIn;
+
+    /// <summary>True when the layout in use here is one this engine chose for *this* conversation.</summary>
+    private bool IsOurOwnGuess(DecisionRequest request) =>
+        _imposedIn == request.ConversationKey && request.CurrentLayout == _layoutWeImposed;
 
     /// <summary>
     /// The layout in effect the last time we looked, and the conversation we were looking at.
@@ -131,7 +143,7 @@ public sealed class DecisionEngine
             //
             // A user who disagrees with a switch fixes it themselves, which clears this, and the
             // very next keystroke is learned normally. Nothing is lost but the echo.
-            var layoutIsOurOwnGuess = request.CurrentLayout == _layoutWeImposed;
+            var layoutIsOurOwnGuess = IsOurOwnGuess(request);
 
             return new Decision
             {
@@ -171,7 +183,7 @@ public sealed class DecisionEngine
             && !request.CanReadContext
             && preference?.LastReliableLanguage is null or Language.Unknown
             && request.CurrentLayout != Language.Unknown
-            && request.CurrentLayout != _layoutWeImposed)
+            && !IsOurOwnGuess(request))
         {
             return new Decision
             {
@@ -219,6 +231,7 @@ public sealed class DecisionEngine
         _lastSwitchAt = now;
         _lastSwitchLanguage = language;
         _layoutWeImposed = language;
+        _imposedIn = request.ConversationKey;
 
         // Our own switch, recorded as observed. Without this the very next signal would see the
         // layout differ from the last observation and blame the user for what we just did.
@@ -349,6 +362,7 @@ public sealed class DecisionEngine
         // The layout is theirs again, so the typing guard may learn from it. This is the release
         // valve that keeps the anti-echo rule above from freezing a conversation on a wrong guess.
         _layoutWeImposed = Language.Unknown;
+        _imposedIn = null;
     }
 
     public Language LastSwitchLanguage => _lastSwitchLanguage;

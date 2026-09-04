@@ -296,6 +296,14 @@ in without the qualifier, and each was right: on a web page, finding no evidence
 window title. Claude's is `Claude`, with no conversation in it, so every conversation there is one
 context. That is the application's doing, not a defect, and no amount of work here changes it.
 
+**The anti-echo guard was global and had to be scoped.** It stops a conversation confirming its own
+guess, but the layout it compared against was single state on an engine shared by every
+conversation - so imposing Hebrew in one application made Hebrew look like our guess *everywhere*,
+and the next application could not learn the language sitting in front of it. Found on WhatsApp,
+from a log line reading `NoSignal` where nothing should have blocked. Single state on this engine
+has now caused this class of fault three times; when something is refused for no visible reason,
+check what is being compared against and whether it belongs to this conversation.
+
 ### Where there is nothing to read
 
 Google Sheets took four rounds, and it is worth reading as one story rather than four fixes. Its
@@ -393,10 +401,10 @@ across 12.9 hours of uptime, or 0.006%. Memory stable at 15.1MB private (46MB wo
 counts shared runtime pages). The generic adapter attaches no MutationObserver and reacts only to
 focus and typing, and the numbers say that was the right call.
 
-**Manual F is written and unrecorded.** Seven rows for the desktop source in `ACCEPTANCE.md`: that
-the allowlist blocks before anything is added, that two windows remember separately, that the
-browser and the watcher never both drive one layout, and that no window title reaches disk. Three
-were exercised while building the feature and none was recorded, so none is marked.
+**Manual F: six of seven pass.** F19 - two windows of one application remembering separately -
+could not be run, because the application used never changes its window title. It needs one that
+does. Everything else passed with evidence, including that no window title reaches disk and that
+the watcher never decides anything about a browser process.
 
 **Alt-tab isolation: settled.** It never needed staging — it happened 23 times on its own during a
 day's use, every one `Suppressed blocker=NotForeground`, none followed by a switch, against 212
