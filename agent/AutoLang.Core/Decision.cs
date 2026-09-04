@@ -26,6 +26,17 @@ public sealed record DecisionRequest
     /// </summary>
     public bool TargetIsForeground { get; init; } = true;
 
+    /// <summary>
+    /// Whether this observation came from somewhere evidence could have been found.
+    ///
+    /// A web page can be read, so finding nothing in one means something: the conversation really
+    /// is empty, or too mixed to call, and the right answer is to do nothing. An application
+    /// outside the browser cannot be read at all - not without accessibility APIs this product
+    /// refuses to use - so finding nothing there says nothing, and treating the two the same left
+    /// the desktop source unable to learn anything ever.
+    /// </summary>
+    public bool CanReadContext { get; init; } = true;
+
     /// <summary>The layout in effect right now, so we never ask for a switch that is already true.</summary>
     public Language CurrentLayout { get; init; } = Language.Unknown;
 

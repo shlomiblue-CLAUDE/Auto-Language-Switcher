@@ -88,6 +88,27 @@
       </div>
     </section>
 
+    <!-- Outside the browser. Its own panel rather than a field inside settings, because it is the
+         one place the product looks at anything beyond a web page, and burying it would be the
+         wrong way to introduce that. -->
+    <section class="panel" aria-labelledby="apps-label">
+      <h2 id="apps-label">Applications outside the browser</h2>
+      <p class="hint">
+        Only applications you add here are watched, and only while one of them is in front. It
+        reads nothing inside them — not the text, not what you type. What it learns is the keyboard
+        you chose there. Window titles are hashed before anything is stored, the same way
+        conversation names are.
+      </p>
+
+      <div id="allowed-apps" class="languages"></div>
+
+      <div class="field">
+        <label for="app-picker">Add an application</label>
+        <select id="app-picker"><option value="">Loading…</option></select>
+        <button type="button" id="add-app">Add</button>
+      </div>
+    </section>
+
     <section class="panel">
       <h2>Your data</h2>
       <p class="hint" style="margin-bottom: 10px">

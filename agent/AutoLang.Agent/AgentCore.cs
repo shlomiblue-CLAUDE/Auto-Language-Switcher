@@ -81,6 +81,10 @@ public sealed class AgentCore
             Site = processName,
             Messages = [],
             ComposerEmpty = true,
+
+            // Nothing about an application is readable, so "no evidence" here is a fact about the
+            // method rather than about the window.
+            CanReadContext = false,
             TargetIsForeground = foreground.Exists && foreground.ProcessName == processName,
             CurrentLayout = _layouts.CurrentLayout(),
             ObservedAt = _clock.Now,

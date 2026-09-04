@@ -87,6 +87,50 @@ public class DesktopWindowTests : IDisposable
     }
 
     [Fact]
+    public void Sitting_in_an_application_with_a_layout_is_itself_the_answer()
+    {
+        // Straight from a live log. The user allowed Claude, set Hebrew, and stayed there. Nothing
+        // was learned: the manual-change rule needs a transition, and the layout was already
+        // Hebrew before the window was ever observed. The log read `memory=none` on the same
+        // window once a second for as long as they sat in it.
+        //
+        // There is no other evidence to wait for. An application cannot be read - not without
+        // accessibility APIs this product refuses - so the layout somebody is sitting with is the
+        // only thing they have said, and it has to count.
+        _store.AllowApp("claude");
+        _layouts.Window = new ForegroundWindow(new IntPtr(4), "claude", "Claude");
+        _layouts.Current = Language.Hebrew;
+
+        _core.ObserveWindow("claude", "Claude");
+
+        var key = DesktopIdentity.ForWindow(_store.Settings.DesktopSalt, "claude", "Claude");
+        Assert.Equal(Language.Hebrew, _store.GetConversation(key)!.LastReliableLanguage);
+    }
+
+    [Fact]
+    public void What_the_product_itself_set_is_never_learned_back()
+    {
+        // The other half, and the reason the rule above is safe. Learning the layout in use would
+        // otherwise confirm the product's own guess - the defect that once made one wrong switch
+        // permanent, arriving here by a new route.
+        _store.AllowApp("claude");
+        _store.AllowApp("code");
+        _layouts.Window = new ForegroundWindow(new IntPtr(4), "claude", "Claude");
+        _layouts.Current = Language.Hebrew;
+        _core.ObserveWindow("claude", "Claude");
+
+        // A second window, which the product switches to Hebrew from nothing but its own habit.
+        _layouts.Window = new ForegroundWindow(new IntPtr(5), "code", "main.ts");
+        _core.ObserveWindow("code", "main.ts");
+
+        var codeKey = DesktopIdentity.ForWindow(_store.Settings.DesktopSalt, "code", "main.ts");
+        var learned = _store.GetConversation(codeKey)?.LastReliableLanguage ?? Language.Unknown;
+
+        // Whatever it learned, it must not be a layout it put there itself.
+        if (learned != Language.Unknown) Assert.NotEqual(Language.Hebrew, _layouts.SwitchRequests.LastOrDefault());
+    }
+
+    [Fact]
     public void Arriving_with_a_different_layout_is_not_read_as_a_choice()
     {
         // The defect this exists for. The user sets Hebrew in Slack, works in an English editor,

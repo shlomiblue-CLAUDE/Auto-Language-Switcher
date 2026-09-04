@@ -48,8 +48,18 @@ public sealed class ForegroundWatcher : IDisposable
     private readonly List<IntPtr> _hooks = [];
     private System.Threading.Timer? _stayPoll;
 
-    /// <summary>The last window reported, so an event that changes nothing sends nothing.</summary>
-    private (string Process, string Title) _last = ("", "");
+    /// <summary>
+    /// The last thing reported: which window, and which layout it had.
+    ///
+    /// The layout belongs in here as much as the window does. Without it the re-read fired every
+    /// second whether anything had changed or not - a live log showed the same line on the same
+    /// window once a second for as long as the user sat in it, which is the wall of identical
+    /// entries the browser side already had to be taught not to produce.
+    ///
+    /// One report per window and layout is exactly what both rules downstream need: the manual
+    /// change wants the transition, and learning-what-is-in-use wants one look, not sixty.
+    /// </summary>
+    private (string Process, string Title, Language Layout) _last = ("", "", Language.Unknown);
 
     public ForegroundWatcher(
         IKeyboardLayoutService layouts,
@@ -116,6 +126,10 @@ public sealed class ForegroundWatcher : IDisposable
             if (!_isAllowed(window.ProcessName)) return;
             if (window.ProcessName != _last.Process || window.Title != _last.Title) return;
 
+            var layout = _layouts.CurrentLayout();
+            if (layout == _last.Layout) return;
+
+            _last = (window.ProcessName, window.Title, layout);
             _onWindow(window.ProcessName, window.Title);
         }
         catch (Exception ex)
@@ -146,9 +160,10 @@ public sealed class ForegroundWatcher : IDisposable
 
             if (!_isAllowed(window.ProcessName)) return;
 
-            if (window.ProcessName == _last.Process && window.Title == _last.Title) return;
-            _last = (window.ProcessName, window.Title);
+            var layout = _layouts.CurrentLayout();
+            if (window.ProcessName == _last.Process && window.Title == _last.Title && layout == _last.Layout) return;
 
+            _last = (window.ProcessName, window.Title, layout);
             _onWindow(window.ProcessName, window.Title);
         }
         catch (Exception ex)

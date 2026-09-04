@@ -156,6 +156,34 @@ public sealed class DecisionEngine
         if (source != DecisionSource.ManualPin && IsInManualCooldown(preference, settings, request.ObservedAt))
             return Suppressed(DecisionBlocker.ManualCooldown);
 
+        // Nothing to go on, and a layout in use that we did not put there.
+        //
+        // On a page this is rare. Outside the browser it is the normal case and the only one: an
+        // application offers no text to read, no direction and no composer, so the typing guard
+        // never fires and the manual-change rule needs a transition it may never see. A user who
+        // sets Hebrew in Slack and simply stays there was producing no evidence at all - a live log
+        // showed `memory=none` on the same window once a second for as long as they sat in it.
+        //
+        // Only when there is nothing remembered yet. Once a language is stored, only a deliberate
+        // change replaces it, so the layout somebody happened to arrive with cannot overwrite what
+        // they chose on purpose.
+        if (language == Language.Unknown
+            && !request.CanReadContext
+            && preference?.LastReliableLanguage is null or Language.Unknown
+            && request.CurrentLayout != Language.Unknown
+            && request.CurrentLayout != _layoutWeImposed)
+        {
+            return new Decision
+            {
+                Outcome = DecisionOutcome.NoChange,
+                Language = request.CurrentLayout,
+                Confidence = 1.0,
+                Source = DecisionSource.ConversationMemory,
+                Blocker = DecisionBlocker.AlreadyCorrect,
+                LearnedLanguage = request.CurrentLayout,
+            };
+        }
+
         if (language == Language.Unknown)
         {
             // Carrying the source and confidence through matters. Without them a suppressed
