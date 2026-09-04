@@ -312,7 +312,7 @@ public class AcceptanceTests : IDisposable
         // The spike proved Windows enforces nothing here: a background Edge window switched just as
         // readily as a foreground one. This guard is the only thing standing between a background
         // tab and the keyboard of whatever the user is actually typing in.
-        _layouts.Foreground = false;
+        _layouts.BrowserInFront = false;
         _layouts.Current = Language.English;
 
         var decision = Send(Family, Ten("outgoing", "Hebrew"));

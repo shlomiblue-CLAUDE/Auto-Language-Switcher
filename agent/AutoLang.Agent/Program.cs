@@ -96,11 +96,29 @@ Log($"pipe:  \\\\.\\pipe\\{PipeServer.PipeName}");
 var available = layouts.AvailableLanguages();
 Log($"layouts available: {(available.Count == 0 ? "NONE" : string.Join(", ", available))}");
 
-foreach (var language in new[] { Language.Hebrew, Language.English })
+// Only languages the user actually asked for. Warning about every language the product knows -
+// which is what a fresh install would do - puts three warnings in front of somebody who writes in
+// two, and a warning nobody can act on is how people learn to skip them.
+foreach (var language in store.Settings.EnabledLanguages)
 {
     if (layouts.Resolve(language) is null)
         Log($"WARNING: no {language} layout is installed. Switching to it will report {ErrorCodes.LayoutNotInstalled}.");
 }
+
+// Started on this thread on purpose: SetWinEventHook delivers through the message queue of the
+// thread that registers it, and the tray's loop below is the only one this process runs.
+using var watcher = new ForegroundWatcher(
+    layouts,
+    isAllowed: name => store.GetApp(name) is not null,
+    onWindow: core.ObserveWindow,
+    log: Log);
+
+watcher.Start();
+
+var allowed = store.AllowedApps();
+Log(allowed.Count == 0
+    ? "no applications allowed; the desktop watcher will report nothing"
+    : $"watching {allowed.Count} allowed application(s)");
 
 using var tray = new TrayIcon(store, layouts, () => cts.Cancel());
 tray.RunMessageLoop();

@@ -130,7 +130,7 @@ public class StabilityTests : IDisposable
     [Fact]
     public void A_background_browser_prevents_every_switch_across_a_long_session()
     {
-        _layouts.Foreground = false;
+        _layouts.BrowserInFront = false;
 
         for (int i = 0; i < 30; i++)
         {

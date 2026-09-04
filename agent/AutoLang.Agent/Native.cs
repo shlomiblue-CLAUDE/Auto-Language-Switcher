@@ -47,6 +47,25 @@ internal static class Native
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern int GetWindowTextW(IntPtr hWnd, StringBuilder text, int count);
 
+    /// <summary>
+    /// The callback Windows holds while a hook is installed.
+    ///
+    /// Whoever installs the hook must keep a reference to the delegate alive for as long as the
+    /// hook is. If it is collected, Windows calls into freed memory - and it does so much later,
+    /// which makes the crash look unrelated to the code that caused it.
+    /// </summary>
+    public delegate void WinEventProc(
+        IntPtr hook, uint eventId, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetWinEventHook(
+        uint eventMin, uint eventMax, IntPtr module, WinEventProc callback,
+        uint processId, uint threadId, uint flags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool UnhookWinEvent(IntPtr hook);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern int GetClassNameW(IntPtr hWnd, StringBuilder name, int count);
 

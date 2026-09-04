@@ -15,21 +15,33 @@ public sealed class TestClock : IClock
 /// </summary>
 public sealed class FakeLayoutService : IKeyboardLayoutService
 {
-    public bool Foreground { get; set; } = true;
+    public bool BrowserInFront { get; set; } = true;
     public Language Current { get; set; } = Language.English;
+
+    /// <summary>Whatever window the fake claims is in front. Desktop tests move this about.</summary>
+    public ForegroundWindow Window { get; set; } = new(new IntPtr(1), "chrome", "a tab");
+
+    /// <summary>What Switch was told to expect, so a test can prove the two are compared.</summary>
+    public IntPtr LastExpectedWindow { get; private set; }
     public bool SwitchSucceeds { get; set; } = true;
     public string? FailureCode { get; set; }
     public List<Language> SwitchRequests { get; } = [];
     public List<Language> Available { get; set; } = [Language.Hebrew, Language.English];
 
     public IReadOnlyList<Language> AvailableLanguages() => Available;
-    public bool IsBrowserForeground() => Foreground;
+    public bool IsBrowserForeground() => BrowserInFront;
+    public ForegroundWindow Foreground() => Window;
     public Language CurrentLayout() => Current;
 
-    public SwitchResult Switch(Language language)
+    public SwitchResult Switch(Language language, IntPtr expectedWindow)
     {
+        LastExpectedWindow = expectedWindow;
         SwitchRequests.Add(language);
         if (!SwitchSucceeds) return SwitchResult.Failed(FailureCode ?? ErrorCodes.SwitchFailed);
+
+        // The real service refuses when the window has moved. Modelled so a test can show the
+        // decision and the switch are checked against the same window.
+        if (expectedWindow != Window.Handle) return SwitchResult.Failed(ErrorCodes.NotForeground);
 
         Current = language;
         return new SwitchResult(true, null, 25, language);
@@ -120,7 +132,7 @@ public class AgentCoreTests : IDisposable
     {
         // The signal has no field for this at all. A page cannot know whether the browser is in
         // the foreground, and a compromised one could lie about it.
-        _layouts.Foreground = false;
+        _layouts.BrowserInFront = false;
 
         var reply = Parse<DecisionMessage>(_core.Handle(Signal()));
 

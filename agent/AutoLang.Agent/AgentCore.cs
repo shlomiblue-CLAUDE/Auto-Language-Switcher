@@ -51,6 +51,84 @@ public sealed class AgentCore
         _log = log ?? (_ => { });
     }
 
+    /// <summary>
+    /// One desktop window came to the front, or renamed itself.
+    ///
+    /// This is the whole desktop path, and it is short because there is nothing to read. No
+    /// messages, no composer: the engine falls straight through to memory, and memory is filled by
+    /// the user changing the layout by hand - the ManualChange rule, which was written for Google
+    /// Sheets and works here for the same reason. An application the product knows nothing about
+    /// gets no decision at all, which is the correct answer rather than a gap.
+    ///
+    /// The title never leaves this method. It goes into a salted hash and the key comes out.
+    /// </summary>
+    public void ObserveWindow(string processName, string windowTitle)
+    {
+        var settings = _store.Settings;
+        var app = _store.GetApp(processName);
+
+        // Not in the allowlist is not a decision to suppress - it is nothing happening at all.
+        // Nothing is logged either, because a log of every application somebody opens is exactly
+        // the record the allowlist exists to avoid keeping.
+        if (app is null) return;
+
+        var key = DesktopIdentity.ForWindow(settings.DesktopSalt, processName, windowTitle);
+        var foreground = _layouts.Foreground();
+
+        var request = new DecisionRequest
+        {
+            ConversationKey = key,
+            Site = processName,
+            Messages = [],
+            ComposerEmpty = true,
+            TargetIsForeground = foreground.Exists && foreground.ProcessName == processName,
+            CurrentLayout = _layouts.CurrentLayout(),
+            ObservedAt = _clock.Now,
+        };
+
+        lock (_gate)
+        {
+            var preference = _store.GetConversation(key);
+            var decision = _engine.Decide(request, settings, preference, ToSiteState(app));
+
+            if (decision.UserOverrode)
+                _store.NoteManualOverride(key, decision.LearnedLanguage);
+            else if (decision.LearnedLanguage != Language.Unknown)
+                _store.RememberLanguage(key, decision.LearnedLanguage);
+
+            _store.RecordDecision(processName, decision);
+
+            if (decision.ShouldSwitch)
+            {
+                var result = _layouts.Switch(decision.Language, foreground.Handle);
+                _log(result.Success
+                    ? $"switched to {decision.Language} in {result.ElapsedMs}ms ({decision.Source}, conf {decision.Confidence:F2})"
+                    : $"switch to {decision.Language} failed: {result.ErrorCode}");
+            }
+
+            LogDecision(key, processName, request, decision, preference);
+        }
+    }
+
+    /// <summary>An allowed application is paused the same way a site is, so the engine needs no new rule.</summary>
+    private static SiteState ToSiteState(AppState app) => new() { Paused = app.Paused };
+
+    /// <summary>
+    /// Applications with a window, for the settings page to offer.
+    ///
+    /// Only processes that own a visible main window, because the user is choosing something they
+    /// can point at - a list of two hundred background services would be unusable and would say
+    /// far more about the machine than anyone needs. Nothing here is written down.
+    /// </summary>
+    private static string[] RunningApplications() =>
+        System.Diagnostics.Process.GetProcesses()
+            .Where(p => p.MainWindowHandle != IntPtr.Zero && !string.IsNullOrEmpty(p.ProcessName))
+            .Select(p => p.ProcessName.ToLowerInvariant())
+            .Where(name => !KeyboardLayoutService.IsBrowserProcess(name))
+            .Distinct()
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
     /// <summary>Routes one inbound message and returns the reply, or null when none is warranted.</summary>
     public string? Handle(string json)
     {
@@ -144,13 +222,18 @@ public sealed class AgentCore
 
         // Foreground state and current layout are read from Windows, never taken from the page.
         // A page cannot know either, and a compromised one could lie about both.
+        //
+        // The window is captured here and carried to the switch, so what gets applied is checked
+        // against the window the decision was made about rather than against "some browser".
+        var foreground = _layouts.Foreground();
+
         var request = new DecisionRequest
         {
             ConversationKey = signal.ConversationKey,
             Site = signal.Site,
             Messages = signal.Messages.Select(m => m.ToObservation()).ToList(),
             ComposerEmpty = signal.ComposerEmpty,
-            BrowserIsForeground = _layouts.IsBrowserForeground(),
+            TargetIsForeground = _layouts.IsBrowserForeground(),
             CurrentLayout = _layouts.CurrentLayout(),
             ObservedAt = now,
         };
@@ -180,7 +263,7 @@ public sealed class AgentCore
 
             if (decision.ShouldSwitch)
             {
-                var result = _layouts.Switch(decision.Language);
+                var result = _layouts.Switch(decision.Language, foreground.Handle);
                 applied = result.Success;
                 errorCode = result.ErrorCode;
 
@@ -217,9 +300,17 @@ public sealed class AgentCore
         SignalMessage signal,
         DecisionRequest request,
         Decision decision,
+        ConversationPreference? preference) =>
+        LogDecision(signal.ConversationKey, signal.Site, request, decision, preference);
+
+    private void LogDecision(
+        string conversationKey,
+        string site,
+        DecisionRequest request,
+        Decision decision,
         ConversationPreference? preference)
     {
-        _conversationKeysSeen.Add(signal.ConversationKey);
+        _conversationKeysSeen.Add(conversationKey);
 
         var memory = preference?.LastReliableLanguage is { } remembered && remembered != Language.Unknown
             ? remembered.ToString()
@@ -254,12 +345,12 @@ public sealed class AgentCore
         // A hostname, never a URL: a path can carry a search term, a document title or a token,
         // and none of those belong in a file this product promises holds nothing identifying.
         _log(
-            $"decision {signal.ConversationKey[..8]} on {(string.IsNullOrEmpty(signal.Site) ? "?" : signal.Site)}: " +
+            $"decision {conversationKey[..8]} on {(string.IsNullOrEmpty(site) ? "?" : site)}: " +
             $"{decision.Outcome}{blocker} " +
             $"lang={decision.Language} src={decision.Source} conf={decision.Confidence:F2} " +
             $"| memory={memory}{pin} layout={request.CurrentLayout} " +
             $"composer={(request.ComposerEmpty ? "empty" : "typing")} " +
-            $"foreground={(request.BrowserIsForeground ? "yes" : "no")} " +
+            $"foreground={(request.TargetIsForeground ? "yes" : "no")} " +
             $"| mine={outgoing.Count}[{Letters(outgoing)}] theirs={incoming.Count}[{Letters(incoming)}] " +
             $"keys={_conversationKeysSeen.Count}");
     }
@@ -384,6 +475,14 @@ public sealed class AgentCore
                     break;
                 }
 
+                case "allowApp" when command.App is { } allow:
+                    _store.AllowApp(allow);
+                    break;
+
+                case "blockApp" when command.App is { } block:
+                    _store.BlockApp(block);
+                    break;
+
                 case "clearData":
                     _store.ClearAll();
                     break;
@@ -417,6 +516,8 @@ public sealed class AgentCore
                 ConfidenceThreshold = _store.Settings.ConfidenceThreshold,
                 ShowIndicator = _store.Settings.ShowIndicator,
                 EnabledLanguages = _store.Settings.EnabledLanguages.Select(l => l.ToTag()).ToArray(),
+                AllowedApps = _store.AllowedApps().ToArray(),
+                RunningApps = query.IncludeRunningApps ? RunningApplications() : [],
                 LastDecision = _lastDecision,
             });
         }

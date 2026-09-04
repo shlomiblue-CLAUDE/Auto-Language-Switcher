@@ -116,11 +116,14 @@ public sealed class CommandMessage
     [JsonPropertyName("type")] public string Type { get; set; } = "command";
     [JsonPropertyName("protocolVersion")] public int ProtocolVersion { get; set; } = Wire.ProtocolVersion;
 
-    /// <summary>setMode | pauseSite | resumeSite | setEnabled | clearData | noteManualChange</summary>
+    /// <summary>setMode | pauseSite | resumeSite | setEnabled | clearData | noteManualChange | allowApp | blockApp</summary>
     [JsonPropertyName("command")] public string Command { get; set; } = "";
 
     [JsonPropertyName("conversationKey")] public string? ConversationKey { get; set; }
     [JsonPropertyName("site")] public string? Site { get; set; }
+
+    /// <summary>A process name, for the desktop allowlist. Never a window title.</summary>
+    [JsonPropertyName("app")] public string? App { get; set; }
     [JsonPropertyName("mode")] public string? Mode { get; set; }
     [JsonPropertyName("language")] public string? LanguageTag { get; set; }
     [JsonPropertyName("enabled")] public bool? Enabled { get; set; }
@@ -141,6 +144,12 @@ public sealed class QueryMessage
     [JsonPropertyName("query")] public string Query { get; set; } = "state";
     [JsonPropertyName("conversationKey")] public string? ConversationKey { get; set; }
     [JsonPropertyName("site")] public string? Site { get; set; }
+
+    /// <summary>
+    /// Asks for the applications running right now, which the settings page needs to offer a
+    /// choice. Off by default, so an ordinary state query never enumerates anything.
+    /// </summary>
+    [JsonPropertyName("includeRunningApps")] public bool IncludeRunningApps { get; set; }
 }
 
 public sealed class DecisionMessage
@@ -175,6 +184,17 @@ public sealed class StateMessage
     [JsonPropertyName("confidenceThreshold")] public double ConfidenceThreshold { get; set; }
     [JsonPropertyName("showIndicator")] public bool ShowIndicator { get; set; }
     [JsonPropertyName("enabledLanguages")] public string[] EnabledLanguages { get; set; } = [];
+
+    /// <summary>Applications the user has allowed the Agent to watch.</summary>
+    [JsonPropertyName("allowedApps")] public string[] AllowedApps { get; set; } = [];
+
+    /// <summary>
+    /// Applications running right now, answered only when the settings page asks.
+    ///
+    /// Produced on demand and never stored. The list exists so somebody can pick from it; keeping
+    /// it would be the record of everything they run that the allowlist is there to avoid.
+    /// </summary>
+    [JsonPropertyName("runningApps")] public string[] RunningApps { get; set; } = [];
     [JsonPropertyName("lastDecision")] public DecisionMessage? LastDecision { get; set; }
 }
 

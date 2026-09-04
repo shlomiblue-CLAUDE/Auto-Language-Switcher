@@ -64,7 +64,7 @@ public sealed class DecisionEngine
 
         // Windows does not enforce this for us; the spike proved a background window switches just
         // as readily as a foreground one. If we do not refuse here, nothing will.
-        if (!request.BrowserIsForeground)
+        if (!request.TargetIsForeground)
             return Suppressed(DecisionBlocker.NotForeground);
 
         // --- The user changed the layout themselves. ---

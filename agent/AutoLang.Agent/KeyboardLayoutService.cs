@@ -1,3 +1,4 @@
+using System.Text;
 using System.Diagnostics;
 using AutoLang.Core;
 using Microsoft.Win32;
@@ -53,6 +54,16 @@ public sealed class KeyboardLayoutService : IKeyboardLayoutService
 
     private static readonly string[] BrowserProcessNames = ["chrome", "msedge"];
 
+    /// <summary>
+    /// Exposed because the desktop watcher must skip these.
+    ///
+    /// A browser reports itself through the extension, which knows which tab and which box the
+    /// user is in. Watching it from the outside as well would put two sources on one keyboard,
+    /// disagreeing about where the user is.
+    /// </summary>
+    public static bool IsBrowserProcess(string processName) =>
+        BrowserProcessNames.Contains(processName, StringComparer.OrdinalIgnoreCase);
+
     private readonly TimeSpan _verifyTimeout = TimeSpan.FromMilliseconds(400);
 
     public static ushort LangIdFor(Language language) => language switch
@@ -102,8 +113,6 @@ public sealed class KeyboardLayoutService : IKeyboardLayoutService
     public IReadOnlyList<Language> AvailableLanguages() =>
         ListInstalled().Select(l => LanguageOf(l.Hkl)).Where(l => l != Language.Unknown).Distinct().ToList();
 
-    public IntPtr ForegroundWindow() => Native.GetForegroundWindow();
-
     public bool IsBrowserForeground()
     {
         var hwnd = Native.GetForegroundWindow();
@@ -125,13 +134,33 @@ public sealed class KeyboardLayoutService : IKeyboardLayoutService
     /// Switches the foreground window to <paramref name="language"/>, verifying the result.
     /// Refuses when the foreground window is not a supported browser.
     /// </summary>
-    public SwitchResult Switch(Language language)
+    public ForegroundWindow Foreground()
+    {
+        var hwnd = Native.GetForegroundWindow();
+        if (hwnd == IntPtr.Zero) return ForegroundWindow.None;
+
+        return new ForegroundWindow(hwnd, ProcessNameOf(hwnd), WindowTitleOf(hwnd));
+    }
+
+    private static string WindowTitleOf(IntPtr hwnd)
+    {
+        var buffer = new StringBuilder(512);
+        int length = Native.GetWindowTextW(hwnd, buffer, buffer.Capacity);
+        return length > 0 ? buffer.ToString(0, Math.Min(length, buffer.Length)) : "";
+    }
+
+    public SwitchResult Switch(Language language, IntPtr expectedWindow)
     {
         var target = Resolve(language);
         if (target is null) return SwitchResult.Failed(ErrorCodes.LayoutNotInstalled);
 
         var hwnd = Native.GetForegroundWindow();
-        if (hwnd == IntPtr.Zero || !IsBrowserForeground())
+
+        // The second of two independent locks, and it now asks a sharper question than it used to.
+        // "Is a browser in front" was true of any browser window; this is true only of the window
+        // the decision was actually about, which also closes the gap where the user moves between
+        // deciding and applying.
+        if (hwnd == IntPtr.Zero || hwnd != expectedWindow)
             return SwitchResult.Failed(ErrorCodes.NotForeground);
 
         uint threadId = Native.GetWindowThreadProcessId(hwnd, out _);

@@ -35,6 +35,7 @@ public sealed class ConversationStore
     private readonly Queue<DebugEvent> _debugEvents = new();
     private Dictionary<string, ConversationPreference> _conversations = [];
     private Dictionary<string, SiteState> _sites = [];
+    private Dictionary<string, AppState> _apps = [];
     private Settings _settings = Settings.Default;
 
     public ConversationStore(string? root = null, IClock? clock = null)
@@ -51,6 +52,15 @@ public sealed class ConversationStore
     public string ConversationsPath => Path.Combine(_root, "conversations.json");
     public string SitesPath => Path.Combine(_root, "sites.json");
 
+    /// <summary>
+    /// The applications the user has allowed the Agent to watch.
+    ///
+    /// Only what they added. An application that is running and not in here is not recorded
+    /// anywhere - not its name, not that it was seen. That is the whole difference between an
+    /// allowlist and a log of everything somebody opens.
+    /// </summary>
+    public string AppsPath => Path.Combine(_root, "apps.json");
+
     public Settings Settings
     {
         get { lock (_gate) return _settings; }
@@ -64,6 +74,51 @@ public sealed class ConversationStore
             _settings = ReadOrDefault(SettingsPath, Settings.Default);
             _conversations = ReadOrDefault<Dictionary<string, ConversationPreference>>(ConversationsPath, []);
             _sites = ReadOrDefault<Dictionary<string, SiteState>>(SitesPath, []);
+            _apps = ReadOrDefault<Dictionary<string, AppState>>(AppsPath, []);
+
+            // Generated on first use rather than at install, so a machine that never watches a
+            // desktop application never has one written.
+            if (string.IsNullOrEmpty(_settings.DesktopSalt))
+            {
+                _settings = _settings with { DesktopSalt = DesktopIdentity.NewSalt() };
+                Write(SettingsPath, _settings);
+            }
+        }
+    }
+
+    public AppState? GetApp(string processName)
+    {
+        lock (_gate) return _apps.GetValueOrDefault(processName.ToLowerInvariant());
+    }
+
+    /// <summary>Every application the user has allowed, for the settings page to show back to them.</summary>
+    public IReadOnlyList<string> AllowedApps()
+    {
+        lock (_gate) return _apps.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList();
+    }
+
+    public void AllowApp(string processName)
+    {
+        lock (_gate)
+        {
+            var key = processName.ToLowerInvariant();
+            if (!_apps.ContainsKey(key)) _apps[key] = new AppState { AllowedAt = _clock.Now };
+            Write(AppsPath, _apps);
+        }
+    }
+
+    /// <summary>
+    /// Withdraws an application, and forgets it entirely.
+    ///
+    /// Removed rather than marked as blocked. A blocked entry would leave a permanent record that
+    /// somebody once ran it, which is the thing the allowlist exists to avoid.
+    /// </summary>
+    public void BlockApp(string processName)
+    {
+        lock (_gate)
+        {
+            _apps.Remove(processName.ToLowerInvariant());
+            Write(AppsPath, _apps);
         }
     }
 
@@ -215,10 +270,14 @@ public sealed class ConversationStore
         {
             _conversations.Clear();
             _sites.Clear();
+            _apps.Clear();
             _debugEvents.Clear();
+
+            // The salt goes with everything else. Keeping it would leave the next desktop window
+            // hashing to the same key as one the user just asked to forget.
             _settings = Settings.Default;
 
-            foreach (var path in new[] { ConversationsPath, SitesPath, SettingsPath })
+            foreach (var path in new[] { ConversationsPath, SitesPath, AppsPath, SettingsPath })
                 if (File.Exists(path)) File.Delete(path);
         }
     }

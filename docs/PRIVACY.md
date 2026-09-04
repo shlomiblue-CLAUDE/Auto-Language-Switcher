@@ -54,6 +54,30 @@ would be rejected, not stored.
 - Refusal: `IsHashedKey` in [`agent/AutoLang.Agent/AgentCore.cs`](../agent/AutoLang.Agent/AgentCore.cs)
 - Tests: [`tests/AutoLang.Agent.Tests/ConversationKeyTests.cs`](../tests/AutoLang.Agent.Tests/ConversationKeyTests.cs)
 
+## Outside the browser
+
+The product also works in applications you add yourself — Slack, an editor, anything with a window.
+This is the part where a keyboard switcher could quietly become something else, so it is worth
+being exact about what it does and does not do.
+
+**It reads nothing.** Not the text in the window, not what you type. Reading another application's
+contents needs accessibility APIs; noticing that you are typing needs a keyboard hook, which is a
+keylogger. Neither is in the code, and `tools/privacy-audit.mjs` fails the build if either appears.
+
+What it sees is the name of the window in front and its title, and what it learns is the keyboard
+layout you chose there. Nothing else exists to learn from — which is why this works at all: the
+same two paths that make it work on a Google Sheet, where the grid is drawn on a canvas and there
+is no text to read either.
+
+**Only applications you add.** Settings → Applications. One that you have not added produces
+nothing: no decision, no stored key, not even a note that it was open. The list of running
+applications shown in that picker is asked for while the page is open and never stored.
+
+**The window title never reaches disk.** Slack puts a channel or a person in it, a mail client puts
+a subject, an editor puts a path. It is hashed with SHA-256 and a salt generated on your machine —
+the same treatment a WhatsApp chat title gets, producing the same 32-character key, which the Agent
+refuses anything else for.
+
 ## What is stored, and where
 
 `%LOCALAPPDATA%\AutoLang` — three small files you can open and read.
@@ -63,6 +87,7 @@ would be rejected, not stored.
 | `settings.json` | Your settings. No conversation data. |
 | `conversations.json` | Hashed key to language, mode, and a timestamp. |
 | `sites.json` | Which sites you have paused. |
+| `apps.json` | The applications you allowed, by process name. |
 
 A real entry, in full:
 

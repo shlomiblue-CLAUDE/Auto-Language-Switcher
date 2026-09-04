@@ -14,6 +14,8 @@ interface AgentState {
   currentLayout?: string;
   availableLayouts?: string[];
   enabledLanguages?: string[];
+  allowedApps?: string[];
+  runningApps?: string[];
   defaultLanguage?: string;
   confidenceThreshold?: number;
   showIndicator?: boolean;
@@ -86,6 +88,7 @@ function render(state: AgentState): void {
     : 'none detected';
 
   renderLanguageChoices(available, state.enabledLanguages ?? [], state.defaultLanguage ?? 'unknown');
+  renderApplications(state.allowedApps ?? [], state.runningApps ?? []);
 
   loaded = true;
 }
@@ -135,6 +138,60 @@ function renderLanguageChoices(available: string[], enabledTags: string[], defau
   defaultLanguage.value = defaultTag;
 }
 
+/**
+ * The applications the user has allowed, and a way to add another.
+ *
+ * The picker is filled from what is running, asked for only when this page is open. Nothing about
+ * an application that is merely running is stored - the list exists so somebody can point at one,
+ * and keeping it would be the record of everything they open that the allowlist avoids.
+ */
+function renderApplications(allowed: string[], running: string[]): void {
+  const list = $('allowed-apps');
+  list.textContent = '';
+
+  if (allowed.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'hint';
+    empty.textContent = 'None yet. Nothing outside the browser is being watched.';
+    list.appendChild(empty);
+  }
+
+  for (const app of allowed) {
+    const row = document.createElement('span');
+    row.className = 'checkbox';
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = `${app} ✕`;
+    remove.title = `Stop watching ${app}`;
+    remove.addEventListener('click', () => {
+      void askAgent({ type: 'command', protocolVersion: 1, command: 'blockApp', app }).then(() => refresh());
+    });
+
+    row.appendChild(remove);
+    list.appendChild(row);
+  }
+
+  const picker = $<HTMLSelectElement>('app-picker');
+  picker.textContent = '';
+
+  const choices = running.filter((app) => !allowed.includes(app));
+  if (choices.length === 0) {
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = 'Nothing else is running with a window';
+    picker.appendChild(none);
+    return;
+  }
+
+  for (const app of choices) {
+    const option = document.createElement('option');
+    option.value = app;
+    option.textContent = app;
+    picker.appendChild(option);
+  }
+}
+
 function chosenLanguages(): string[] {
   const boxes = [...$('enabled-languages').querySelectorAll<HTMLInputElement>('input[type=checkbox]')];
   const ticked = boxes.filter((b) => b.checked).map((b) => b.value);
@@ -166,6 +223,12 @@ async function save(): Promise<void> {
   setTimeout(() => (saveStatus.textContent = ''), 2000);
 }
 
+$('add-app').addEventListener('click', () => {
+  const app = $<HTMLSelectElement>('app-picker').value;
+  if (!app) return;
+  void askAgent({ type: 'command', protocolVersion: 1, command: 'allowApp', app }).then(() => refresh());
+});
+
 threshold.addEventListener('input', () => {
   thresholdValue.textContent = `${threshold.value}%`;
 });
@@ -191,7 +254,21 @@ $('clear-data').addEventListener('click', () => {
   })();
 });
 
-void (async () => {
-  const state = await askAgent({ type: 'query', protocolVersion: 1, query: 'state' });
+/**
+ * Reads the whole state and redraws.
+ *
+ * The running-application list is asked for here and nowhere else. An ordinary state query - the
+ * one the popup makes constantly - never enumerates anything, so nothing is looked at unless this
+ * page is open and looking.
+ */
+async function refresh(): Promise<void> {
+  const state = await askAgent({
+    type: 'query',
+    protocolVersion: 1,
+    query: 'state',
+    includeRunningApps: true,
+  });
   if (state) render(state);
-})();
+}
+
+void refresh();

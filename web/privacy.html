@@ -85,6 +85,25 @@ becomes  { "Hebrew": 9 }</pre>
     The text exists only inside the function that counts it. What leaves the page is the count.
   </p>
 
+  <h2>Outside the browser</h2>
+  <p>
+    It also works in applications you add yourself. This is where a keyboard switcher could quietly
+    become something else, so: <strong>it reads nothing there.</strong> Not the text in the window,
+    not what you type. Reading another application's contents needs accessibility interfaces;
+    noticing that you are typing needs a keyboard hook, which is a keylogger. Neither is in the
+    code, and a release check fails the build if either appears.
+  </p>
+  <p>
+    What it sees is which window is in front, and what it learns is the keyboard layout you chose
+    while you were there. <strong>Only applications you add</strong> — one you have not added
+    produces nothing at all, not even a note that it was open.
+  </p>
+  <p>
+    <strong>Window titles never reach your disk.</strong> They carry a channel, a person, a subject,
+    a file path, so they are hashed with a random value created on your computer, exactly as
+    conversation names are.
+  </p>
+
   <h2>What it stores</h2>
   <p>Three files in <code>%LOCALAPPDATA%\AutoLang</code>, which you can open and read at any time.</p>
 
@@ -93,6 +112,7 @@ becomes  { "Hebrew": 9 }</pre>
     <tr><td><code>settings.json</code></td><td>Your settings. No conversation data.</td></tr>
     <tr><td><code>conversations.json</code></td><td>A hashed key, the language you type there, and a date.</td></tr>
     <tr><td><code>sites.json</code></td><td>Which sites you have paused.</td></tr>
+    <tr><td><code>apps.json</code></td><td>The applications you allowed, by process name.</td></tr>
   </table>
 
   <p>A complete entry, nothing omitted:</p>

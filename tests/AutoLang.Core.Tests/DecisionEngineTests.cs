@@ -32,7 +32,7 @@ public class DecisionEngineTests
         Site = "web.whatsapp.com",
         Messages = messages?.ToList() ?? [],
         ComposerEmpty = composerEmpty,
-        BrowserIsForeground = foreground,
+        TargetIsForeground = foreground,
         CurrentLayout = currentLayout,
         ObservedAt = _clock.Now,
     };

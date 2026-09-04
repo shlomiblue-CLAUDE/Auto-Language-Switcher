@@ -38,4 +38,5 @@ public partial class WireJsonContext : JsonSerializerContext;
 [JsonSerializable(typeof(Settings))]
 [JsonSerializable(typeof(Dictionary<string, ConversationPreference>))]
 [JsonSerializable(typeof(Dictionary<string, SiteState>))]
+[JsonSerializable(typeof(Dictionary<string, AppState>))]
 public partial class StoreJsonContext : JsonSerializerContext;

@@ -153,6 +153,36 @@ const agentNet = netTypes.filter((t) => agentSource.includes(t));
 if (agentNet.length === 0) pass('agent contains no network client', `${agentFiles.length} files scanned`);
 else fail('agent contains no network client', `found: ${agentNet.join(', ')}`);
 
+// The two ways a desktop watcher stops being a keyboard switcher and becomes something else.
+// Reading another application's contents needs UI Automation or MSAA; noticing that somebody is
+// typing in one needs a keyboard hook. Neither is here, and neither may be added quietly.
+const forbiddenApis = [
+  ['SetWindowsHookEx', 'a keyboard hook'],
+  ['WH_KEYBOARD', 'a keyboard hook'],
+  ['GetAsyncKeyState', 'reading the keyboard directly'],
+  ['UIAutomation', 'UI Automation'],
+  ['IAccessible', 'MSAA'],
+  ['AccessibleObjectFromWindow', 'MSAA'],
+];
+
+const found = forbiddenApis.filter(([needle]) => agentSource.includes(needle));
+
+if (found.length === 0) {
+  pass('agent reads no other application', 'no keyboard hook, no accessibility API');
+} else {
+  fail('agent reads no other application', `found ${found.map(([, name]) => name).join(', ')}`);
+}
+
+// The window title is the desktop equivalent of a chat title, and it must be hashed before it can
+// be stored. This is the structural half of that: only one function may produce a desktop key.
+const identity = readFileSync(join(repo, 'agent/AutoLang.Core/DesktopIdentity.cs'), 'utf8');
+
+if (identity.includes('SHA256') && identity.includes('salt')) {
+  pass('desktop keys are salted hashes');
+} else {
+  fail('desktop keys are salted hashes', 'DesktopIdentity no longer hashes with a salt');
+}
+
 // --- What is actually on disk ---------------------------------------------------------------
 
 section('Stored data on this machine');
@@ -195,6 +225,27 @@ if (storeFiles.length === 0) {
 
   if (hits.length === 0) pass('nothing identifying on disk', `${files.length} files scanned`);
   else fail('nothing identifying on disk', `found ${hits.join(', ')} in ${storeDir}`);
+
+  // apps.json is the desktop allowlist, and it is the one file here that holds a plain name on
+  // purpose: a process name is what the user picked, and showing it back to them is the point.
+  // What must never appear in it is a window title, which carries the person, the subject or the
+  // file path.
+  const apps = join(storeDir, 'apps.json');
+  if (existsSync(apps)) {
+    const names = Object.keys(JSON.parse(readFileSync(apps, 'utf8')));
+    const suspicious = names.filter((n) => n.includes(' ') || n.includes('.') || n.length > 40);
+
+    if (suspicious.length === 0) {
+      pass('the allowlist holds process names and nothing else', `${names.length} allowed`);
+    } else {
+      fail(
+        'the allowlist holds process names and nothing else',
+        `these do not look like process names: ${suspicious.join(', ')}`,
+      );
+    }
+  } else {
+    pass('no applications allowed yet');
+  }
 
   // Every key in conversations.json must be a salted hash.
   const conversations = join(storeDir, 'conversations.json');

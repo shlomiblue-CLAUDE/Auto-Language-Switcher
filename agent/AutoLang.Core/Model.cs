@@ -95,6 +95,21 @@ public sealed record SiteState
     public string AdapterVersion { get; init; } = "";
 }
 
+/// <summary>
+/// One application the user has allowed the Agent to watch.
+///
+/// Presence in the store *is* the permission. There is no Allowed flag, because a flag invites a
+/// file that lists every application somebody has ever run with most of them switched off - which
+/// is the record this feature exists to avoid keeping.
+/// </summary>
+public sealed record AppState
+{
+    public bool Paused { get; init; }
+
+    /// <summary>When the user allowed it. Diagnostic, and a reason to trust the file's contents.</summary>
+    public DateTimeOffset AllowedAt { get; init; }
+}
+
 public sealed record Settings
 {
     public static readonly Settings Default = new();
@@ -116,6 +131,16 @@ public sealed record Settings
     /// one, which keeps the evidence order in the engine the only thing that decides.
     /// </summary>
     public IReadOnlyList<Language> EnabledLanguages { get; init; } = [];
+
+    /// <summary>
+    /// The salt used to hash desktop window titles, generated once on this machine.
+    ///
+    /// Lives here rather than beside the browser's salt because the Agent has to hash without the
+    /// browser being involved at all. It is not a secret in the usual sense - losing it costs the
+    /// memory of every desktop window and nothing else - but it must never leave the machine, or
+    /// the stored keys stop being meaningless elsewhere.
+    /// </summary>
+    public string DesktopSalt { get; init; } = "";
 
     public double ConfidenceThreshold { get; init; } = 0.70;
     public bool ShowIndicator { get; init; } = true;

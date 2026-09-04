@@ -13,13 +13,18 @@ public sealed record DecisionRequest
     public bool ComposerEmpty { get; init; } = true;
 
     /// <summary>
-    /// Whether the browser owns the foreground window.
+    /// Whether the thing this observation is about owns the foreground window.
     ///
     /// The phase 0 spike proved Windows will happily change a background window's layout, so this
     /// is not a courtesy check - it is the only thing standing between a background tab and the
     /// layout of whatever the user is actually typing in.
+    ///
+    /// It used to be named for the browser, because the browser was the only source. A desktop
+    /// application asking about its own window needs the same guard and a different question, and
+    /// a field called BrowserIsForeground answering for Slack would be a lie in the one place this
+    /// codebase cannot afford one.
     /// </summary>
-    public bool BrowserIsForeground { get; init; } = true;
+    public bool TargetIsForeground { get; init; } = true;
 
     /// <summary>The layout in effect right now, so we never ask for a switch that is already true.</summary>
     public Language CurrentLayout { get; init; } = Language.Unknown;
