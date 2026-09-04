@@ -112,9 +112,30 @@ Watch for:
 | The layout | Follows the conversation, within about half a second |
 | While typing | Never changes mid-sentence |
 | Flip-flopping | Never. Not once |
-| Another window | Alt-tab away mid-session — its layout must not change |
+| Another window | Alt-tab away mid-session — its layout must not change. **PASS, 2026-09-04**, see below |
 | `AutoLang.exe` CPU | At rest between switches. Not a steady percentage |
 | Memory after 30 | Stable, well under 50MB |
+
+### The alt-tab row, settled from the log rather than by watching
+
+This one never needed staging: it happened 23 times on its own during a day's use.
+
+```
+decisions taken while the browser was not in front   23
+switches applied across the whole session           212
+switches within 1.5s of a background decision         0
+```
+
+Every one of the 23 reads `Suppressed blocker=NotForeground`, and none is followed by a switch.
+There are two independent locks, which is why: the engine refuses before choosing a language, and
+`KeyboardLayoutService.Switch` reads the foreground window again itself and returns
+`NotForeground` rather than posting the message. Either alone would hold.
+
+What this proves is that the product never asked Windows to move a layout while the browser was in
+the background — and `Switch` is the only path by which another window's layout could change. What
+it does not do is watch the other window with human eyes, which is worth saying because that is how
+the row was written. The mechanism is measured; the consequence follows from there being no other
+route to it.
 
 Task Manager, Details tab, watch `AutoLang.exe`.
 

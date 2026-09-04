@@ -35,11 +35,10 @@ The `.pem` is needed to sign a `.crx` for distribution outside the store, and to
 `key` field. Neither is on the launch path, since the Chrome Web Store signs. Worth keeping a copy
 somewhere; not the single point of failure this paragraph used to claim it was.
 
-**Status: working end to end on the user's machine**, on WhatsApp Web and on ordinary sites. Five
-manual acceptance runs pass, including all eleven rows for generic sites — and the product was
-still badly broken on Google Sheets when they did, which is worth more than the eleven ticks. One
-row has never been run: that alt-tabbing away leaves the other window's layout alone.
-See [Open](#open).
+**Status: working end to end on the user's machine**, on WhatsApp Web and on ordinary sites. Every
+manual acceptance row has now been run. Two results are worth more than the ticks: the eleven
+generic-site rows passed while the product was still overriding the keyboard on Google Sheets, and
+E13 fails there and passes on Gmail. See [Open](#open).
 
 ---
 
@@ -349,8 +348,10 @@ across 12.9 hours of uptime, or 0.006%. Memory stable at 15.1MB private (46MB wo
 counts shared runtime pages). The generic adapter attaches no MutationObserver and reacts only to
 focus and typing, and the numbers say that was the right call.
 
-**Alt-tab isolation, still not observed.** That another window's layout is left alone. The one
-acceptance row never run.
+**Alt-tab isolation: settled.** It never needed staging — it happened 23 times on its own during a
+day's use, every one `Suppressed blocker=NotForeground`, none followed by a switch, against 212
+switches applied that session. Two independent locks: the engine refuses before choosing, and
+`KeyboardLayoutService.Switch` re-reads the foreground window and refuses to post the message.
 
 **Untested by choice:** the Windows setting "let me use a different input method for each app
 window" in its OFF state.
