@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     Reverses everything Install.ps1 did: the executable, the native messaging registration for both
-    browsers, the sign-in entry, and the Apps and Features record.
+    browsers, the Startup shortcut, and the Apps and Features record.
 
     Your stored conversation preferences are kept unless you pass -RemoveData. Uninstalling is
     often a reinstall, and silently discarding which language someone uses in each of their
@@ -56,10 +56,20 @@ foreach ($browser in 'Google\Chrome', 'Microsoft\Edge') {
     }
 }
 
+# Autostart moved to a Startup shortcut after Defender quarantined the executable over the Run
+# value; see the note in Install.ps1. Both are removed, because an uninstall that leaves a stale
+# Run value pointing at a deleted file leaves the machine with a broken sign-in entry and a
+# heuristic's favourite artefact.
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 if (Get-ItemProperty -Path $runKey -Name $AppId -ErrorAction SilentlyContinue) {
     Remove-ItemProperty -Path $runKey -Name $AppId
     Write-Host "removed  $runKey\$AppId"
+}
+
+$shortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'Auto Language Switcher.lnk'
+if (Test-Path $shortcut) {
+    Remove-Item $shortcut -Force
+    Write-Host "removed  $shortcut"
 }
 
 $uninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$AppId"

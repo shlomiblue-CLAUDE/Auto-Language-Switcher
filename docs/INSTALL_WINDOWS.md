@@ -70,7 +70,7 @@ accounts on the machine.
 |---|---|
 | `%LOCALAPPDATA%\Programs\AutoLang` | The program |
 | `HKCU\...\NativeMessagingHosts\com.autolang.bridge` | How Chrome and Edge find it |
-| `HKCU\...\CurrentVersion\Run` | Starts it when you sign in |
+| A shortcut in your Startup folder | Starts it when you sign in |
 | `HKCU\...\Uninstall\AutoLang` | So it appears in Apps and Features |
 
 A tray icon appears when it is running. Right-click it for status, an on/off switch, and the data

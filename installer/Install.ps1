@@ -11,7 +11,7 @@
     What it does:
       1. Copies AutoLang.exe to %LOCALAPPDATA%\Programs\AutoLang
       2. Registers the native messaging host for Chrome and Edge (HKCU)
-      3. Starts the Agent at sign-in
+      3. Starts the Agent at sign-in, through a shortcut in the Startup folder
       4. Adds an entry to Apps and Features so it can be removed the ordinary way
       5. Starts the Agent now
 
@@ -21,7 +21,15 @@
     Folder holding AutoLang.exe. Defaults to dist\agent beside this repository.
 
 .PARAMETER NoAutostart
-    Skip the sign-in entry. The Agent still starts on demand when the browser first needs it.
+    Skip the Startup shortcut. The Agent still starts on demand when the browser first needs it.
+
+.PARAMETER LogDecisions
+    Start the Agent with --verbose, now and at every sign-in, so every decision is written to
+    %LOCALAPPDATA%\AutoLang\agent.log for tools\review-log.ps1 to read.
+
+    Off by default: the log is a diagnostic, not something a product should write forever without
+    being asked. But without it on the shortcut too, logging stops at the next sign-in - which is
+    how a week of "watch it in real use" quietly turns into a week of nothing.
 
 .PARAMETER Verify
     After installing, confirm from a separate process that the registration is actually visible.
@@ -41,6 +49,7 @@
 param(
     [string] $Source,
     [switch] $NoAutostart,
+    [switch] $LogDecisions,
     [switch] $Verify
 )
 
@@ -83,8 +92,25 @@ if ($running) {
 # --- Files ------------------------------------------------------------------------------------
 
 New-Item -ItemType Directory -Force $installDir | Out-Null
-Copy-Item $sourceExe $targetExe -Force
-Write-Host "copied   $targetExe"
+
+# The whole folder, not just the executable: the Agent is no longer a single-file bundle, so its
+# runtime sits beside it as ordinary DLLs. See the note in AutoLang.Agent.csproj for why - a
+# single-file build is deleted by Defender before it can run.
+#
+# Uninstall.ps1 is excluded because it is copied separately below and is running from this folder
+# during an uninstall.
+$copied = Get-ChildItem $Source -Recurse -File
+foreach ($file in $copied) {
+    $relative = $file.FullName.Substring($Source.Length).TrimStart('\')
+    $destination = Join-Path $installDir $relative
+    New-Item -ItemType Directory -Force (Split-Path -Parent $destination) | Out-Null
+    Copy-Item $file.FullName $destination -Force
+}
+Write-Host ("copied   {0} files to {1}" -f $copied.Count, $installDir)
+
+# A partial copy is a product that starts and then fails on the first serialisation, which is a
+# far worse symptom than a missing file.
+if (-not (Test-Path $targetExe)) { throw "AutoLang.exe is missing from $installDir after the copy." }
 
 # --- Native messaging host --------------------------------------------------------------------
 
@@ -148,14 +174,47 @@ Write-Host ("wrote    native messaging registration for {0} browsers" -f $Browse
 
 # --- Start at sign-in -------------------------------------------------------------------------
 
-$runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+# A shortcut in the Startup folder rather than an entry under HKCU\...\Run, and the reason is not
+# taste.
+#
+# Measured on 2026-09-05: Windows Defender quarantined this executable a minute after an install,
+# as Behavior:Win32/Persistence.A!ml at severity "severe". The resources it named were the
+# executable together with the Run value and the Uninstall key, and the process it blamed was the
+# PowerShell that wrote them. That is the point worth keeping: an unsigned binary whose path a
+# script writes into Run is the shape the behavioural model is trained on, and the remediation is
+# not a warning. It deleted the executable and both keys, and a product that had been working a
+# minute earlier had nothing left on disk to run.
+#
+# A .lnk in the Startup folder starts the Agent at sign-in in exactly the same way, and gets there
+# by writing a file instead of a persistence value. Nothing here makes it immune - the durable fix
+# is a code-signing certificate and reputation - but this part is free.
+$startupDir = [Environment]::GetFolderPath('Startup')
+$shortcut = Join-Path $startupDir "$AppName.lnk"
+
+# An install over a version that used the Run key would otherwise start the Agent twice, and leave
+# the flagged value behind for a heuristic to find later.
+$legacyRunKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+if (Get-ItemProperty -Path $legacyRunKey -Name $AppId -ErrorAction SilentlyContinue) {
+    Remove-ItemProperty -Path $legacyRunKey -Name $AppId
+    Write-Host "removed  the older $legacyRunKey\$AppId entry"
+}
 
 if ($NoAutostart) {
-    Remove-ItemProperty -Path $runKey -Name $AppId -ErrorAction SilentlyContinue
+    if (Test-Path $shortcut) { Remove-Item $shortcut -Force }
     Write-Host 'skipped  autostart'
 } else {
-    Set-ItemProperty -Path $runKey -Name $AppId -Value "`"$targetExe`""
-    Write-Host "wrote    $runKey\$AppId"
+    $shell = New-Object -ComObject WScript.Shell
+    $link = $shell.CreateShortcut($shortcut)
+    $link.TargetPath = $targetExe
+    $link.WorkingDirectory = $installDir
+    $link.Description = "$AppName - switches the keyboard layout to the language you are writing in"
+    if ($LogDecisions) { $link.Arguments = '--verbose' }
+    $link.Save()
+
+    # A shortcut that was not written is autostart that silently never happens, and the symptom
+    # would arrive a reboot later as "it stopped working by itself".
+    if (-not (Test-Path $shortcut)) { throw "The Startup shortcut was not created at $shortcut" }
+    Write-Host "wrote    $shortcut"
 }
 
 # --- Apps and Features ------------------------------------------------------------------------
@@ -187,7 +246,7 @@ Write-Host "wrote    $uninstallKey"
 
 # --- Start it ---------------------------------------------------------------------------------
 
-Start-Process $targetExe
+if ($LogDecisions) { Start-Process $targetExe -ArgumentList '--verbose' } else { Start-Process $targetExe }
 Start-Sleep -Milliseconds 800
 
 $started = Get-Process AutoLang -ErrorAction SilentlyContinue

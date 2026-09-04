@@ -3,7 +3,7 @@
     Builds everything into dist/ in the shape it actually ships.
 
 .DESCRIPTION
-    Produces extension\dist (load unpacked) and dist\agent (one executable, AutoLang.exe).
+    Produces extension\dist (load unpacked) and dist\agent (AutoLang.exe and its runtime).
 
     This script exists because hand-copying build output broke exactly once, and silently. An
     apphost .exe is a thin launcher and the real code sits in the matching .dll, so copying only

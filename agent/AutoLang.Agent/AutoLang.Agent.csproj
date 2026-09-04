@@ -15,7 +15,28 @@
     <!-- Self-contained so users never have to install a .NET runtime.
          Trimmed because WinForms is gone: with it, the SDK refuses to trim at all (NETSDK1175)
          and the download was 155MB. Without it, 12.6MB. -->
-    <PublishSingleFile>true</PublishSingleFile>
+
+    <!--
+      Not a single file, and this was measured rather than chosen.
+
+      Windows Defender quarantined the single-file build as Behavior:Win32/Persistence.A!ml -
+      three publishes in a row, in two different output folders, deleted while dotnet was still
+      writing them. `dist\agent\` came out empty and GenerateBundle failed with "Could not find
+      file ...\AutoLang.exe". The same source published with PublishSingleFile=false survived both
+      the publish and being run. So the trigger is the self-extracting bundle, not the code, not
+      the path, and not the icon.
+
+      That is a known shape to an antivirus: one unsigned executable that unpacks a runtime into a
+      temp folder at startup looks like a dropper because droppers do exactly that. A folder of
+      ordinary DLLs beside a 150KB host does not.
+
+      The cost is real and small: 49 files and 19MB installed, instead of one file and 13MB. The
+      installer copies a folder, which it had to create anyway. What it buys is a product that
+      does not delete itself on a default Windows machine.
+
+      This does not replace code signing. It removes the free part of the problem.
+    -->
+    <PublishSingleFile>false</PublishSingleFile>
     <PublishTrimmed>true</PublishTrimmed>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

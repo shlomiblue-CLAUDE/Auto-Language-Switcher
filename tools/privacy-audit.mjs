@@ -230,10 +230,25 @@ if (storeFiles.length === 0) {
   // purpose: a process name is what the user picked, and showing it back to them is the point.
   // What must never appear in it is a window title, which carries the person, the subject or the
   // file path.
+  //
+  // "Looks like a process name" is a narrower claim than it first appears, and the first version of
+  // this check got it wrong: it rejected any name containing a dot. Real data broke it. WhatsApp
+  // desktop runs as `WhatsApp.Root`, OneDrive as `OneDrive.Sync.Service` - both measured on the
+  // machine this was written on, both perfectly ordinary. A dot is not evidence of anything.
+  //
+  // What actually separates the two is that a process name is a file name. Windows forbids
+  // < > : " / \ | ? * in one, and a window title is full of them - a path, a subject line, a
+  // "file - App" separator. Together with a space and a length bound, that is the real boundary.
+  //
+  // A one-word title with no punctuation - Claude's window is literally `Claude` - is not
+  // distinguishable from a process name and passes. That is the honest limit and it costs nothing:
+  // what this check exists to keep off disk is a title carrying a person, a subject or a path, and
+  // none of those fit in one word.
   const apps = join(storeDir, 'apps.json');
   if (existsSync(apps)) {
     const names = Object.keys(JSON.parse(readFileSync(apps, 'utf8')));
-    const suspicious = names.filter((n) => n.includes(' ') || n.includes('.') || n.length > 40);
+    const notInAFileName = /[<>:"/\\|?*]/;
+    const suspicious = names.filter((n) => n.includes(' ') || notInAFileName.test(n) || n.length > 40);
 
     if (suspicious.length === 0) {
       pass('the allowlist holds process names and nothing else', `${names.length} allowed`);

@@ -11,7 +11,7 @@ Run the automated part with:
 ```
 
 ```bash
-dotnet test                       # 201 tests, including the twelve rows below
+dotnet test                       # 239 C# tests, including the twelve rows below
 node tools/privacy-audit.mjs      # the privacy gate
 node tools/bridge-smoke-test.mjs  # five checks across three processes
 ```
@@ -423,7 +423,7 @@ Fill in when run. An empty row is more useful than an assumed one.
 
 | Check | Date | Result | Notes |
 |---|---|---|---|
-| Automated suite (201 tests) | 2026-09-03 | PASS | |
+| Automated suite (361 tests) | 2026-09-05 | PASS | 142 Core, 97 Agent, 122 TypeScript. Counted from the build output, not carried forward from a previous number |
 | Privacy audit | 2026-09-03 | PASS, 1 skipped | Store empty; stored-data check did not run |
 | Bridge smoke test (5) | 2026-09-03 | PASS | Against the installed build |
 | Manual A — selectors | 2026-09-03 | FAIL, then PASS | Direction was dead; adapter v2.0.0 resolves 19/19 live, 0 disagreements |
@@ -433,6 +433,9 @@ Fill in when run. An empty row is more useful than an assumed one.
 | Manual E — an ordinary site | 2026-09-04 | PASS, 11/11 | Every row read back from the agent log. CPU 31ms across 8.8 minutes of use, 0.006% over 12.9 hours; memory stable at 15.1MB private. Rows 3 and 4 needed a second attempt. **All eleven passed while the product was overriding the keyboard on Google Sheets** — see what passing did not prove |
 | Manual E12–E15 — a canvas application | 2026-09-04 | PASS | 58 decisions, zero switches applied. E13 fails on Sheets for a structural reason and passes end to end on Gmail, which settles it as a property of the page rather than a fault |
 | Manual F16–F22 — outside the browser | 2026-09-04 | 6/7 PASS | F19 not runnable on an application whose window title never changes. The run found a real defect: one application's guess blocked another from learning |
+| Real-use round, day 1 | 2026-09-05 | FAIL — blocked | Windows Defender quarantined `AutoLang.exe` as `Behavior:Win32/Persistence.A!ml` within a minute of installing, taking the executable, the `Run` value and the `Uninstall` key with it. It then quarantined the build output mid-`publish`. Autostart moved to a Startup-folder shortcut; the machine needs a hand-made allow in Windows Security before anything can run again |
+| Privacy audit | 2026-09-05 | PASS, 17/17 | Found a real defect in itself: the allowlist check rejected any name containing a dot, and `WhatsApp.Root` and `OneDrive.Sync.Service` are ordinary process names |
+| Log reviewer | 2026-09-05 | FAIL, then PASS | `review-log.ps1` had been reading 447 of 2567 decision lines and reporting "Nothing suspicious" over the rest. Its pattern predates the ` on <site>` segment added to the log on 2026-09-03 23:30. Any "clean" reading taken from this tool after that moment covered only the decisions made outside the browser |
 
 ---
 

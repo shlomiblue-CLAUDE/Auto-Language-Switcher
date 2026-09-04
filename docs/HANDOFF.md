@@ -1,7 +1,8 @@
 # Handoff
 
 Context for a new session. Read this first; it is shorter than the code and it contains things the
-code cannot tell you — chiefly one environment trap that cost a full day and will cost it again.
+code cannot tell you — chiefly two traps, one that cost a full day and one that empties the build
+output while you watch. Both will happen again.
 
 ---
 
@@ -86,6 +87,67 @@ Files are not redirected. Only the registry, and store files that this shell has
 
 ---
 
+## Read this before running the installer, too
+
+**Windows Defender quarantines this executable.** Not a warning, not a prompt — it deletes it.
+
+Measured on 2026-09-05, from the Defender operational log:
+
+| | |
+|---|---|
+| Detection | `Behavior:Win32/Persistence.A!ml`, severity severe |
+| Resources | `AutoLang.exe`, the `HKCU\...\Run` value, the `HKCU\...\Uninstall` key |
+| Blamed process | `powershell.exe`, then `dotnet.exe` |
+| Action | Quarantine |
+
+It started as a behavioural detection: an install wrote the executable's path into `Run`, a script
+rewrote that same value forty seconds later to add `--verbose`, and the model fired on the shape —
+an unsigned binary made to persist by a script. Within a minute the executable, the `Run` value and
+the `Uninstall` key were all gone from a machine where the product had been working.
+
+**It then escalated to the file itself.** The next `dotnet publish` was quarantined mid-build,
+blamed on `dotnet.exe`, three times in a row — `dist\agent\` ended up empty and `GenerateBundle`
+failed with `Could not find file ...\AutoLang.exe`. Once that happens the product cannot be built
+or run on that machine until somebody allows it in Windows Security by hand. **That is a person's
+decision and not one to make for them**, so there is nothing here to automate.
+
+**Allowing the quarantined file in Windows Security did not fix it.** The next build was
+quarantined again within seconds. An "allow" clears one file; a behavioural rule re-evaluates every
+newly written one.
+
+**What actually fixed it was giving up the single-file bundle**, and that was measured rather than
+guessed. Two publishes were compared from the same source, in the same minute:
+
+| | Result |
+|---|---|
+| `PublishSingleFile=true`, 13MB, one file | quarantined during `publish`, in two different folders |
+| `PublishSingleFile=false`, 19MB, 49 files | survived the publish, ran, printed its layouts |
+
+So the trigger is the self-extracting bundle, not the code, not the path, and not the icon. That is
+fair enough from Defender's side: one unsigned executable that unpacks a runtime into a temp folder
+at startup is what a dropper looks like. The csproj now publishes a folder and both installers copy
+one. The full reasoning is in `AutoLang.Agent.csproj`.
+
+Three things came out of it, and only the first two are free:
+
+- **Autostart is a Startup-folder shortcut now, not a `Run` value.** Same effect at sign-in,
+  reached by writing a file rather than a persistence key. `Install.ps1`, `Uninstall.ps1` and
+  `AutoLang.iss` all had to change together, and `Install.ps1` deletes a leftover `Run` value from
+  any older install.
+- **The Agent ships as a folder, not one file.** 19MB and 49 files installed instead of 13MB and
+  one.
+- **The rest is the code-signing certificate**, which was already the first launch item and is now
+  blocking more than store friction. Neither change makes an unsigned tray binary that starts at
+  sign-in look trustworthy to a behavioural model; they only remove the two shapes that were free to
+  remove. Submitting the binary to Microsoft as a false positive
+  (`microsoft.com/wdsi/filesubmission`) is also free and worth doing on the way.
+
+**Do not re-write the `Run` value to add `--verbose`.** That is what set this off. `Install.ps1
+-LogDecisions` puts the flag on the shortcut instead, which is also the only way logging survives
+a sign-in.
+
+---
+
 ## Architecture
 
 ```
@@ -160,11 +222,22 @@ memory. Both rules were paid for once, in the defect below, and they apply here 
 .\build.ps1
 
 # install (from an ordinary shell, or out of process — see above)
-.\installer\Install.ps1 -Verify
+.\installer\Install.ps1 -Verify -LogDecisions
 
 # is the product behaving?
-.\tools\review-log.ps1            # add -Isolated from a sandboxed shell
+.\tools\review-log.ps1 -Since '2026-09-05 01:00'   # add -Isolated from a sandboxed shell
 ```
+
+**Always pass `-Since`.** The log is cumulative and never truncated, so without it a review reports
+defects that were found and fixed days earlier as though they were live. Pass the moment the build
+under test started running.
+
+**And read the first line it prints.** `review-log.ps1` spent two days reading 447 of 2567 decision
+lines and calling the rest clean: the log gained an ` on <site>` segment on 2026-09-03 23:30 and the
+tool's pattern never did. It reported "Nothing suspicious" over 2120 decisions it could not parse.
+It now prints a red warning naming that count, and that warning is the only reason to trust anything
+printed under it. **Any clean reading taken from this tool between 2026-09-03 23:30 and 2026-09-05
+covered only the decisions made outside the browser.**
 
 Node and dotnet are not on this shell's PATH. Prepend:
 
@@ -175,7 +248,7 @@ $env:DOTNET_ROOT = "$env:LOCALAPPDATA\Microsoft\dotnet"
 
 There is no `agent.sln`; test the two projects individually.
 
-**360 tests: 142 Core, 96 Agent, 122 TypeScript.** The build fails on any of them, on a privacy
+**361 tests: 142 Core, 97 Agent, 122 TypeScript.** The build fails on any of them, on a privacy
 audit failure, or on a store preflight failure.
 
 Count them rather than adding them up from a previous message. Three commits state a total that is
@@ -189,7 +262,9 @@ Get-Process AutoLang | Stop-Process -Force
 & "$env:LOCALAPPDATA\Programs\AutoLang\AutoLang.exe" --verbose
 ```
 
-Autostart does **not** pass `--verbose`, so it is quiet after the next sign-in.
+Autostart carries `--verbose` only if the install was run with `-LogDecisions`; otherwise it
+is quiet after the next sign-in. Do not add the flag by editing the registry — see the Defender
+note above.
 
 Every decision line names the site it came from. Generic-site signals are recognisable by shape:
 exactly one message, always incoming — `mine=0[...] theirs=1[...]`.
@@ -376,7 +451,7 @@ have not looked at.
 | `extension/src/background/` | Permission gate, dynamic injection, tab revival, native port |
 | `extension/src/content/` | Observer: adapter chain, debounce, focus, typing filter, orphan handling |
 | `tools/verify-registration.ps1` | Is the registration visible to other processes? |
-| `tools/review-log.ps1` | Flip-flop and memory-churn detector. Proven against a fixture |
+| `tools/review-log.ps1` | Flip-flop and memory-churn detector. Warns loudly when it cannot parse the log, which it once did silently |
 | `tools/privacy-audit.mjs` | Release gate. Proven to catch a planted phone number |
 | `tools/store-preflight.mjs` | Derives the extension ID from the manifest key |
 | `docs/ACCEPTANCE.md` | The rows, what passed, and what each round of manual testing found |

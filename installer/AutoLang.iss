@@ -52,7 +52,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "hebrew";  MessagesFile: "compiler:Languages\Hebrew.isl"
 
 [Files]
-Source: "{#SourceDir}\AutoLang.exe"; DestDir: "{app}"; Flags: ignoreversion
+; The whole publish folder: the Agent is not a single-file bundle, because Defender quarantines
+; that shape. Its runtime DLLs sit beside AutoLang.exe. See AutoLang.Agent.csproj.
+Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; The extension is shipped alongside so it can be loaded unpacked until the store listing is live.
 Source: "..\extension\dist\*"; DestDir: "{app}\extension"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -70,9 +72,14 @@ Root: HKCU; Subkey: "Software\Google\Chrome\NativeMessagingHosts\{#HostName}"; \
 Root: HKCU; Subkey: "Software\Microsoft\Edge\NativeMessagingHosts\{#HostName}"; \
     ValueType: string; ValueName: ""; ValueData: "{app}\{#HostName}.json"; Flags: uninsdeletekey
 
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
-    ValueType: string; ValueName: "{#AppId}"; ValueData: """{app}\AutoLang.exe"""; \
-    Flags: uninsdeletevalue; Tasks: autostart
+[Icons]
+; Autostart is a shortcut in the Startup folder, not a value under HKCU\...\Run.
+;
+; Measured on 2026-09-05: Defender quarantined the executable as Behavior:Win32/Persistence.A!ml
+; and named the Run value among the resources. An unsigned binary written into Run is the shape
+; that model looks for, and it deletes rather than warns. See the longer note in Install.ps1;
+; the two installers must not disagree about this.
+Name: "{userstartup}\{#AppName}"; Filename: "{app}\AutoLang.exe"; Tasks: autostart
 
 [Run]
 Filename: "{app}\AutoLang.exe"; Description: "Start {#AppName} now"; Flags: nowait postinstall skipifsilent

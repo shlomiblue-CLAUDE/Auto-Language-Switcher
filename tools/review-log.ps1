@@ -35,6 +35,16 @@
 .PARAMETER FlipFlopWindowSeconds
     How close two opposing switches on one conversation must be to count as a flip-flop.
 
+.PARAMETER Since
+    Ignore everything logged before this moment.
+
+    The log is cumulative and the Agent never truncates it, so a review a week into real use is
+    mostly a review of the week before - including defects that were found and fixed in between.
+    Reporting those again as though they were live is how a fix stops being believed.
+
+    Pass the moment the version under test started running. `-Since '2026-09-05 01:00'` works, and
+    so does `-Since (Get-Date).AddDays(-1)`.
+
 .PARAMETER Isolated
     Read the log through a process started outside this one.
 
@@ -51,6 +61,7 @@
 param(
     [string] $Path = (Join-Path $env:LOCALAPPDATA 'AutoLang\agent.log'),
     [int] $FlipFlopWindowSeconds = 5,
+    [datetime] $Since,
     [switch] $Isolated
 )
 
@@ -84,15 +95,42 @@ if ($Isolated) {
 }
 
 Write-Host "Reviewing $Path" -ForegroundColor Cyan
-Write-Host "  $($lines.Count) lines`n"
+
+if ($PSBoundParameters.ContainsKey('Since')) {
+    $before = $lines.Count
+
+    # Every line the Agent writes starts with its own timestamp, so this is a filter and not a
+    # guess. A line that does not parse is dropped rather than kept: keeping it would quietly
+    # readmit the history this switch exists to exclude.
+    $lines = $lines | Where-Object {
+        $_ -match '^\[(?<at>[\d\- :\.]+)\]' -and [datetime]::Parse($Matches.at) -ge $Since
+    }
+
+    Write-Host ("  {0} lines, from {1} since {2:yyyy-MM-dd HH:mm}" -f $lines.Count, $before, $Since)
+
+    if ($lines.Count -eq 0) {
+        Write-Host "`nNothing logged after that moment." -ForegroundColor Yellow
+        Write-Host 'Either nothing has happened yet, or the Agent is not running with --verbose.'
+        exit 2
+    }
+    Write-Host ''
+} else {
+    Write-Host "  $($lines.Count) lines`n"
+}
 
 # --- Parse -------------------------------------------------------------------------------------
 
+# The " on <where>" segment is optional because it was added to the log after this tool was
+# written, and the tool did not notice. It went on reporting "Nothing suspicious" over lines it
+# could no longer read: 2120 of 2567 decisions on this machine, everything after the day the site
+# name was added. A parser that silently matches nothing is worse than one that crashes, so the
+# count of unreadable decision lines is now printed rather than assumed to be zero.
 $decisions = foreach ($line in $lines) {
-    if ($line -match '^\[(?<at>[\d\- :\.]+)\] decision (?<key>[0-9a-f]{8}): (?<outcome>\w+)') {
+    if ($line -match '^\[(?<at>[\d\- :\.]+)\] decision (?<key>[0-9a-f]{8})(?: on (?<where>[^:]+))?: (?<outcome>\w+)') {
         [pscustomobject]@{
             At       = [datetime]::Parse($Matches.at)
             Key      = $Matches.key
+            Where    = if ($Matches.where) { $Matches.where } else { 'outside the browser' }
             Outcome  = $Matches.outcome
             Blocker  = if ($line -match 'blocker=(\w+)') { $Matches[1] } else { $null }
             Language = if ($line -match ' lang=(\w+)') { $Matches[1] } else { $null }
@@ -104,6 +142,16 @@ $decisions = foreach ($line in $lines) {
 }
 
 $switches = $decisions | Where-Object { $_.Outcome -eq 'Switch' }
+
+# The check that would have caught the silence above, and the reason it is loud rather than a
+# footnote: every unread decision is a defect this tool cannot see, reported to you as a clean bill
+# of health.
+$decisionLines = @($lines | Where-Object { $_ -match ' decision ' }).Count
+$unread = $decisionLines - @($decisions).Count
+if ($unread -gt 0) {
+    Write-Host ("WARNING: {0} of {1} decision lines did not parse. This tool is not reading the log." -f $unread, $decisionLines) -ForegroundColor Red
+    Write-Host "         The log format has moved on. Fix the pattern in this file before trusting anything below.`n"
+}
 
 # --- Counts ------------------------------------------------------------------------------------
 
@@ -145,8 +193,11 @@ foreach ($group in $switches | Group-Object Key) {
     for ($i = 1; $i -lt $ordered.Count; $i++) {
         $gap = ($ordered[$i].At - $ordered[$i - 1].At).TotalSeconds
         if ($gap -le $FlipFlopWindowSeconds -and $ordered[$i].Language -ne $ordered[$i - 1].Language) {
-            $problems += "flip-flop on $($group.Name): $($ordered[$i-1].Language) then $($ordered[$i].Language) " +
-                         "after {0:F1}s at $($ordered[$i].At.ToString('HH:mm:ss'))" -f $gap
+            # The date belongs here. A bare time reads as "this happened today", and a log that
+            # spans a week of real use makes that wrong most of the time.
+            $problems += "flip-flop on $($group.Name) ($($ordered[$i].Where)): " +
+                         "$($ordered[$i-1].Language) then $($ordered[$i].Language) " +
+                         "after {0:F1}s at $($ordered[$i].At.ToString('yyyy-MM-dd HH:mm:ss'))" -f $gap
         }
     }
 }
