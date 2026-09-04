@@ -35,8 +35,9 @@ The `.pem` is needed to sign a `.crx` for distribution outside the store, and to
 `key` field. Neither is on the launch path, since the Chrome Web Store signs. Worth keeping a copy
 somewhere; not the single point of failure this paragraph used to claim it was.
 
-**Status: working end to end on the user's machine**, on WhatsApp Web and on ordinary sites. Four
-manual acceptance rows pass; the rows for generic sites are written and unmarked. See [Open](#open).
+**Status: working end to end on the user's machine**, on WhatsApp Web and on ordinary sites. Five
+manual acceptance runs pass, including all eleven rows for generic sites. One row has never been
+run: that alt-tabbing away leaves the other window's layout alone. See [Open](#open).
 
 ---
 
@@ -277,17 +278,23 @@ looks perfectly healthy — `store-preflight.mjs` recomputes the ID from the key
 
 ## Open
 
-**Manual E is written and unmarked.** Eleven rows in `ACCEPTANCE.md` covering generic sites: the
-permission grant, per-box memory, password fields producing nothing, the all-sites grant, and that
-WhatsApp still logs one decision per conversation change rather than two. The user exercised most
-of them in practice without recording the result. An assumed pass is worth less than an empty row.
+**Manual E passed in full on 2026-09-04**, all eleven rows read back from the agent log rather
+than from what the screen appeared to do. Two are worth knowing about:
 
-**CPU and memory under sustained load, still not observed.** The oldest open row, and now spread
-across every site the user allows rather than one. The generic adapter attaches no MutationObserver
-and reacts only to focus and typing, which is the design that should make this cheap — but should
-is not measured.
+- Row 4 is the strongest evidence the design works: two boxes on one Gmail page, two seconds apart,
+  one switching to Hebrew from memory and the other to English from its own context.
+- Rows 3 and 4 failed their first attempt for a reason that will catch the next person too. Typing
+  in the language the engine already chose teaches it nothing — the anti-echo rule correctly refuses
+  to learn its own guess, so everything read `memory=none` and it looked broken. Switch the layout
+  by hand first. Treat any "it never remembers" report as this until proven otherwise.
 
-**Alt-tab isolation, still not observed.** That another window's layout is left alone.
+**CPU and memory: settled, and cheap.** 31ms of CPU across 8.8 minutes of active use; 2.594s total
+across 12.9 hours of uptime, or 0.006%. Memory stable at 15.1MB private (46MB working set, which
+counts shared runtime pages). The generic adapter attaches no MutationObserver and reacts only to
+focus and typing, and the numbers say that was the right call.
+
+**Alt-tab isolation, still not observed.** That another window's layout is left alone. The one
+acceptance row never run.
 
 **Untested by choice:** the Windows setting "let me use a different input method for each app
 window" in its OFF state.

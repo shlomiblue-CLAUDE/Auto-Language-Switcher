@@ -246,8 +246,47 @@ Read the evidence, not the impression:
 .\tools\review-log.ps1 -Isolated
 ```
 
-And CPU, which is the same unmeasured question as manual C, now spread across every site the user
-allows rather than one: Task Manager, Details, `AutoLang.exe`, with a few granted tabs open.
+### Run of 2026-09-04
+
+Performed by the user; each row read back from the agent log rather than from what the screen
+appeared to do. Rows expecting silence are only marked where the user confirmed they took the
+action, because silence is otherwise indistinguishable from a step not taken.
+
+| # | Result | Evidence |
+|---|---|---|
+| 1 | PASS | Popup read exactly "Not watching duckduckgo.com yet." |
+| 2 | PASS | A decision for `duckduckgo.com` appears seconds after the grant, with no page reload between them. Injection into an already-open tab works |
+| 3 | PASS | After a manual switch to Hebrew and typing, `a6843237` shows `memory=Hebrew`; returning to the empty box gives `Switch lang=Hebrew src=ConversationMemory` |
+| 4 | PASS | Two boxes on one page holding different languages two seconds apart: `a6843237` → Hebrew from memory, `0d63a6a5` → English from its own context. Moving between them flips the layout each way |
+| 5 | PASS | A password field was focused and typed into. Not one line in the log — no decision, no key, no signal |
+| 6 | PASS | Silence from that site immediately after revoking, with the tab never reloaded |
+| 7 | PASS | Still silent after the reload |
+| 8 | PASS | A key held for several seconds produced **one** `UserTyping` line. Two exist in the whole session |
+| 9 | PASS | `volfr.com`, never granted individually, produced decisions immediately after the all-sites grant and was never asked about |
+| 10 | PASS | Five conversation changes, **one** Switch each, and no two decisions on the same key within 60ms. Two observers in one page would arrive in near-lockstep; nothing does |
+| 11 | PASS | Gmail was granted individually, then the all-sites grant was revoked at 13:26. Gmail was still deciding at 13:44. Chrome did not absorb the narrower grant into the broad one |
+
+**Testing memory needs a language the product did not choose,** and the first attempt at rows 3
+and 4 proved nothing because of it. The user typed English into boxes the engine had already set
+to English; the anti-echo rule then correctly declined to learn, because the layout in use was its
+own guess rather than a choice. Every read came back `memory=none` and it looked like a failure.
+
+Switching the layout by hand first and typing in the language it did *not* pick makes the same rows
+pass immediately. Anyone re-running these needs to know that, and any bug report of the form
+"it never remembers anything" should be checked against it before it is believed.
+
+**CPU and memory — the row left open since manual C.** 105 samples at 5s intervals across 8.8
+minutes of active use, read from a process outside the sandbox:
+
+```
+CPU      2.563s → 2.594s   =  31ms over 8.8 minutes of use
+         2.594s total over 771 minutes of uptime  =  0.006%
+memory   46.2 → 46.4 MB working set, peak 46.8 MB;  private bytes 15.1 MB
+```
+
+At rest between switches, which is what the row asks. On the memory bar, honestly: 46.8 MB is not
+"well under 50" — but that is working set, which counts shared runtime pages. What this process
+actually costs is the 15.1 MB of private bytes.
 
 ---
 
@@ -264,7 +303,7 @@ Fill in when run. An empty row is more useful than an assumed one.
 | Manual B — network | 2026-09-03 | PASS | Zero requests in the service worker Network panel across several conversation switches. On disk: 3 files, no message text, the one stored key is 32 hex characters |
 | Manual C — 30 switches | 2026-09-03 | FAIL, then PASS | Found two real defects. After both: no flip-flop across a session, switches 11–19ms, three evidence sources, zero failed switches. CPU and memory not observed |
 | Manual D — Edge foreground | 2026-09-03 | PASS | 7/8, 15–25ms; real switch applied by the shipped binary |
-| Manual E — an ordinary site | | | Eleven rows above, including the all-sites grant. Not run |
+| Manual E — an ordinary site | 2026-09-04 | PASS, 11/11 | Every row read back from the agent log. CPU 31ms across 8.8 minutes of use, 0.006% over 12.9 hours; memory stable at 15.1MB private. Rows 3 and 4 needed a second attempt — see the note under them |
 
 ---
 
