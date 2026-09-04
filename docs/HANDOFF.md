@@ -21,10 +21,19 @@ claim and a release-gating audit enforces it (`tools/privacy-audit.mjs`, wired i
 **Repository:** `D:\claude workspace\H-E`, branch `main` — the only branch. Backed up to a private
 GitHub repo, `shlomiblue-CLAUDE/Auto-Language-Switcher`.
 
-**`secrets/extension-key.pem` is not in it, and must never be.** It is gitignored, and it is also
-the one irreplaceable file here: the extension ID is derived from it and the native host allowlist
-names that ID exactly. Lose it and every existing install breaks while the extension looks
-perfectly healthy. It needs a backup that is not this repository.
+**`secrets/` is not in it, and must never be.** It is gitignored, and the private key belongs
+nowhere near a remote.
+
+What that costs is less than it sounds, and I first wrote the opposite here. The extension **ID
+survives without the private key**, because it is derived from the *public* key — the `key` field
+in `extension/public/manifest.json`, which is committed and backed up, and which
+`store-preflight.mjs` recomputes the ID from. Nothing in the build or the installer reads the
+`.pem`; only `tools/bridge-smoke-test.mjs` touches `secrets/`, and only for `extension-id.txt`,
+which it falls back without.
+
+The `.pem` is needed to sign a `.crx` for distribution outside the store, and to regenerate the
+`key` field. Neither is on the launch path, since the Chrome Web Store signs. Worth keeping a copy
+somewhere; not the single point of failure this paragraph used to claim it was.
 
 **Status: working end to end on the user's machine**, on WhatsApp Web and on ordinary sites. Four
 manual acceptance rows pass; the rows for generic sites are written and unmarked. See [Open](#open).
