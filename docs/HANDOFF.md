@@ -11,9 +11,16 @@ code cannot tell you — chiefly one environment trap that cost a full day and w
 Windows keyboard layout to the language you are about to type in. Hebrew and English in v1. Built
 from `PDR_Auto_Language_Switcher_Claude_Code_HE (1).docx`, which describes WhatsApp Web only.
 
-It now works **anywhere the user writes**. WhatsApp Web has a hand-written adapter and is granted at
-install; every other site is opt-in from the popup, one origin at a time or all of them at once.
-Memory is per writing box, so a Hebrew message and an English search on the same page stay separate.
+It now works **anywhere the user writes**, in the browser and outside it.
+
+- **In the browser:** WhatsApp Web has a hand-written adapter and is granted at install; every other
+  site is opt-in from the popup, one origin at a time or all of them at once. Memory is per writing
+  box, so a Hebrew message and an English search on the same page stay separate.
+- **Outside it:** applications the user adds in settings — Slack, an editor, anything with a
+  window. Memory is per window. Nothing inside them is read, and that is not a shortcut; see
+  [Outside the browser](#outside-the-browser).
+- **Five languages:** Hebrew, English, Russian, Arabic, Greek — the ones whose *script* the
+  detector can tell apart. Which of them the product may use is a setting.
 
 Entirely local: no API, no server, no telemetry, no remote code. That is the product's central
 claim and a release-gating audit enforces it (`tools/privacy-audit.mjs`, wired into the build).
@@ -82,10 +89,10 @@ Files are not redirected. Only the registry, and store files that this shell has
 ## Architecture
 
 ```
-Content script                              [phase 2: desktop source, not built]
-  WhatsAppAdapter → GenericAdapter                  │
-        │ letter counts only                        │
-        ▼                                           │
+Content script                              ForegroundWatcher (in the Agent)
+  WhatsAppAdapter → GenericAdapter          SetWinEventHook, allowlisted
+        │ letter counts only                        │ process + hashed window title
+        ▼                                           │ no text, ever
   Service worker ──native messaging──►  AutoLang.exe (bridge mode)
    permission gate, dynamic injection               │ named pipe
         ▲                                           │
@@ -168,9 +175,12 @@ $env:DOTNET_ROOT = "$env:LOCALAPPDATA\Microsoft\dotnet"
 
 There is no `agent.sln`; test the two projects individually.
 
-**327 tests: 128 Core, 86 Agent, 113 TypeScript.** The build fails on any of them, on a privacy
-audit failure, or on a store preflight failure. Two commit messages give the count as one short;
-the number here is the one that was counted.
+**360 tests: 142 Core, 96 Agent, 122 TypeScript.** The build fails on any of them, on a privacy
+audit failure, or on a store preflight failure.
+
+Count them rather than adding them up from a previous message. Three commits state a total that is
+one or ten short, every one of them mine and every one an arithmetic slip in prose while the code
+was right.
 
 Verbose logging is off by default and is the only way to see decisions:
 
@@ -253,6 +263,39 @@ removes `chrome.runtime` outright rather than throwing a named error — so the 
 failing, and open tabs are revived once per extension load. This is not a development annoyance:
 every published update does it to every user with a tab open.
 
+### Outside the browser
+
+A second source, and the one that could most easily stop being a keyboard switcher. It reads
+**nothing** in another application: reading contents means accessibility APIs, and noticing typing
+means a global keyboard hook, which is a keylogger. `privacy-audit.mjs` fails the build if either
+appears in the Agent's source.
+
+It does not need to read anything, and Sheets is why we knew that before writing it. Identity is
+the process plus the window title, salted-hashed in `DesktopIdentity` into the same 32-hex shape
+every source must produce. Only applications the user adds are watched, and one that was never
+added produces nothing at all — no decision, no key, not even a note that it was open.
+
+**Three things this cost that were not obvious:**
+
+`SetWinEventHook` reports arrivals. **Nothing reports a layout changed while the user stays put**,
+because Windows sends that to the window rather than to an observer. Without a one-second re-read
+of the current window, the desktop source can never learn anything.
+
+**Arriving somewhere with a different layout is not a choice.** It is where the user came from.
+Reading it as a choice makes Slack learn English every time it is reached from an English editor,
+overwriting what was chosen on purpose. The engine tells them apart by whether the conversation
+changed between two observations.
+
+**A transition is not the only evidence.** Somebody who sets Hebrew and simply stays there never
+produces one, and a live log showed `memory=none` on the same window once a second for as long as
+they sat in it. So the layout in use now counts — but *only where nothing can be read*, which is
+what `DecisionRequest.CanReadContext` is for. Three existing tests failed the moment that rule went
+in without the qualifier, and each was right: on a web page, finding no evidence **is** evidence.
+
+**A limit worth knowing before investigating it again:** some applications never change their
+window title. Claude's is `Claude`, with no conversation in it, so every conversation there is one
+context. That is the application's doing, not a defect, and no amount of work here changes it.
+
 ### Where there is nothing to read
 
 Google Sheets took four rounds, and it is worth reading as one story rather than four fixes. Its
@@ -306,6 +349,8 @@ have not looked at.
 | `agent/AutoLang.Agent/` | Win32. Layout service, pipe server, bridge mode, tray, `AgentCore` |
 | `extension/src/adapters/whatsapp/` | Selectors, geometry-based direction, adapter. The fragile part |
 | `extension/src/adapters/generic/` | Any other site: field selection, context climbing, field identity |
+| `agent/AutoLang.Agent/ForegroundWatcher.cs` | The desktop source. Two window events and a one-second re-read |
+| `agent/AutoLang.Core/DesktopIdentity.cs` | Window title to salted hash. The only way a desktop key is made |
 | `extension/src/background/` | Permission gate, dynamic injection, tab revival, native port |
 | `extension/src/content/` | Observer: adapter chain, debounce, focus, typing filter, orphan handling |
 | `tools/verify-registration.ps1` | Is the registration visible to other processes? |
@@ -347,6 +392,11 @@ not been run. Three things worth knowing:
 across 12.9 hours of uptime, or 0.006%. Memory stable at 15.1MB private (46MB working set, which
 counts shared runtime pages). The generic adapter attaches no MutationObserver and reacts only to
 focus and typing, and the numbers say that was the right call.
+
+**Manual F is written and unrecorded.** Seven rows for the desktop source in `ACCEPTANCE.md`: that
+the allowlist blocks before anything is added, that two windows remember separately, that the
+browser and the watcher never both drive one layout, and that no window title reaches disk. Three
+were exercised while building the feature and none was recorded, so none is marked.
 
 **Alt-tab isolation: settled.** It never needed staging — it happened 23 times on its own during a
 day's use, every one `Suppressed blocker=NotForeground`, none followed by a switch, against 212

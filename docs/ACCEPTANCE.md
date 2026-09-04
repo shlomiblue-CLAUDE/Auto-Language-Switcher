@@ -370,6 +370,34 @@ actually costs is the 15.1 MB of private bytes.
 
 ---
 
+## Manual F — outside the browser
+
+The desktop source reads nothing, so there is no parsing to check and no evidence to judge. What
+these rows check is that the permission is real, that identity is per window, and that the two
+sources never both drive one keyboard.
+
+Run them with the Agent started with `--verbose`, and read the log rather than the screen.
+
+| # | Do this | Expected |
+|---|---|---|
+| F16 | **Before allowing anything**, switch between applications and change the layout by hand | Silence. Not a decision, not a key, not a line. This is the row that says the allowlist is real |
+| F17 | Settings → Applications → add one, then go to it and set a layout by hand | It is learned. The next line reads the language, from `ConversationMemory` |
+| F18 | Leave for another application and come back | The layout returns on its own, and what was learned is unchanged — arriving somewhere is not a choice |
+| F19 | Two windows of one application with different titles, a different language in each | Two keys, each remembering its own |
+| F20 | Application → browser → application, several times | Never two sources on one layout. No decision on a browser process ever comes from the watcher |
+| F21 | Sit in an allowed application without touching anything for a minute | One line, not sixty. The re-read reports once per window and layout |
+| F22 | Open `apps.json` and `conversations.json` | Process names in the first, 32-hex keys in the second, and no window title anywhere |
+
+F16 and F22 are the two that matter most, because they are the claims made to a user rather than
+conveniences. F21 is the one that would go unnoticed: it was broken when first written, and a live
+log showed the same line once a second for as long as somebody sat in a window.
+
+**A limit rather than a failure.** Some applications never change their window title — Claude's is
+`Claude`, with no conversation in it — so F19 cannot be run there and every conversation in that
+application is one context. Choose an application whose title moves, and record which one was used.
+
+---
+
 ## Results
 
 Fill in when run. An empty row is more useful than an assumed one.
@@ -385,6 +413,7 @@ Fill in when run. An empty row is more useful than an assumed one.
 | Manual D — Edge foreground | 2026-09-03 | PASS | 7/8, 15–25ms; real switch applied by the shipped binary |
 | Manual E — an ordinary site | 2026-09-04 | PASS, 11/11 | Every row read back from the agent log. CPU 31ms across 8.8 minutes of use, 0.006% over 12.9 hours; memory stable at 15.1MB private. Rows 3 and 4 needed a second attempt. **All eleven passed while the product was overriding the keyboard on Google Sheets** — see what passing did not prove |
 | Manual E12–E15 — a canvas application | 2026-09-04 | PASS | 58 decisions, zero switches applied. E13 fails on Sheets for a structural reason and passes end to end on Gmail, which settles it as a property of the page rather than a fault |
+| Manual F16–F22 — outside the browser | | | Written with the feature. F16, F17 and F21 were exercised while building it; none is recorded, so none is marked |
 
 ---
 
