@@ -18,6 +18,17 @@ import { relevantLetters } from '../src/shared/text-normalizer.js';
 const HEBREW = 'שלום וברוך הבא לאתר שלנו';
 const ENGLISH = 'Welcome to our site, please sign in below';
 
+/**
+ * Page fixtures have to carry real weight now.
+ *
+ * The adapter refuses to report evidence below MIN_EVIDENCE_LETTERS, because a ratio over a few
+ * letters is returned as certainty - which is how 29 letters of leftover interface on a Google
+ * Sheet switched the layout to English while the user typed Hebrew. A fixture with one short
+ * sentence in it would be testing the floor rather than the behaviour it was written for.
+ */
+const HEBREW_PAGE = `${HEBREW} `.repeat(5);
+const ENGLISH_PAGE = `${ENGLISH} `.repeat(5);
+
 function field(html: string): HTMLElement {
   document.body.innerHTML = html;
   const element = document.querySelector<HTMLElement>('[data-subject]');
@@ -115,7 +126,7 @@ describe('GenericAdapter', () => {
     it('reports the page language as incoming, never as the user', () => {
       document.title = 'ברוכים הבאים';
       field('<textarea data-subject name="comment"></textarea>');
-      document.body.insertAdjacentHTML('beforeend', `<p>${HEBREW}</p>`);
+      document.body.insertAdjacentHTML('beforeend', `<p>${HEBREW_PAGE}</p>`);
 
       const [message, ...rest] = adapter.read().messages;
 
@@ -130,7 +141,7 @@ describe('GenericAdapter', () => {
 
     it('does not count the user’s own draft as the page', () => {
       const box = field('<textarea data-subject name="comment"></textarea>') as HTMLTextAreaElement;
-      document.body.insertAdjacentHTML('beforeend', `<p>${ENGLISH}</p>`);
+      document.body.insertAdjacentHTML('beforeend', `<p>${ENGLISH_PAGE}</p>`);
 
       adapter.read();
       box.value = HEBREW;
@@ -148,7 +159,7 @@ describe('GenericAdapter', () => {
       field('<textarea data-subject name="comment"></textarea>');
       document.body.insertAdjacentHTML(
         'beforeend',
-        `<p>${ENGLISH}</p><div contenteditable="true">${HEBREW}</div>`,
+        `<p>${ENGLISH_PAGE}</p><div contenteditable="true">${HEBREW_PAGE}</div>`,
       );
 
       const counts = adapter.read().messages[0]?.counts ?? {};
@@ -162,6 +173,7 @@ describe('GenericAdapter', () => {
     it('does not read a page as English because of its JavaScript', () => {
       document.title = 'ברוכים הבאים';
       field('<textarea data-subject name="comment"></textarea>');
+      document.body.insertAdjacentHTML('beforeend', `<p>${HEBREW_PAGE}</p>`);
       document.body.insertAdjacentHTML(
         'beforeend',
         '<script>const translate = function veryLongEnglishIdentifier() { return "hello world"; };</script>' +
@@ -206,7 +218,8 @@ describe('GenericAdapter', () => {
 
     it('still falls back to the whole page when nothing narrower has any text', () => {
       document.title = 'ברוכים הבאים';
-      document.body.innerHTML = '<div><span><textarea data-subject name="q"></textarea></span></div>';
+      document.body.innerHTML =
+        `<div><span><textarea data-subject name="q"></textarea></span><p>${HEBREW_PAGE}</p></div>`;
       document.querySelector<HTMLElement>('[data-subject]')!.focus();
 
       // No container around the field holds enough text to be a context, so the body is the
@@ -241,6 +254,47 @@ describe('GenericAdapter', () => {
 
       const counts = reading.messages[0]?.counts ?? {};
       expect(counts.Hebrew ?? 0).toBeGreaterThan((counts.English ?? 0) * 5);
+    });
+
+    it('counts only what the user can see', () => {
+      // Measured on a live blank Google Sheet: the sampler collected 333 characters and every one
+      // was invisible - "A browser error has occurred", "Turn on screen reader support", and the
+      // account panel, which is where the user's own name and email were being read from. The grid
+      // is a canvas, so there was no content at all, and the product read Google's English
+      // interface as the language of a spreadsheet at full confidence.
+      field('<textarea data-subject name="comment"></textarea>');
+      document.body.insertAdjacentHTML(
+        'beforeend',
+        `<div id="closed-menu">${ENGLISH_PAGE}</div><p id="on-screen">${HEBREW_PAGE}</p>`,
+      );
+
+      // jsdom implements no layout, so visibility is stated rather than computed - which is also
+      // how the browser answers, just from the cascade instead of from a test.
+      const hidden = document.getElementById('closed-menu')!;
+      (hidden as unknown as { checkVisibility: () => boolean }).checkVisibility = () => false;
+
+      const counts = adapter.read().messages[0]?.counts ?? {};
+
+      expect(counts.English ?? 0).toBe(0);
+      expect(counts.Hebrew ?? 0).toBeGreaterThan(0);
+    });
+
+    it('says nothing rather than something thin', () => {
+      // The defect, in the numbers the log actually carried. A spreadsheet whose grid is a canvas
+      // left 29 visible letters of interface behind; confidence is a ratio, so 29 English letters
+      // and no Hebrew read as certainty and the engine switched to English four separate times
+      // while the user was typing Hebrew in a cell.
+      //
+      // The climb to a context already had a bar. Falling back to the body had none, and took
+      // whatever was there.
+      field('<textarea data-subject name="comment"></textarea>');
+      document.body.insertAdjacentHTML('beforeend', '<p>Sheet1 Explore Sum Average Count</p>');
+
+      const reading = adapter.read();
+
+      // No evidence at all, not weak evidence: that is what lets the engine fall through to its
+      // global default and leave the keyboard where the user put it.
+      expect(reading.messages).toEqual([]);
     });
 
     it('reports no messages when the page has no letters, so the default can apply', () => {
@@ -340,7 +394,7 @@ describe('field identity', () => {
     document.body.innerHTML = '';
   });
 
-  function describeOnly(html: string): string {
+  function describeOnly(html: string): string | null {
     document.body.innerHTML = html;
     return describeField(document.querySelector('[data-subject]')!);
   }
@@ -375,21 +429,33 @@ describe('field identity', () => {
     // React and Radix generate these per mount. Accepting one produces a field whose identity
     // changes on every load, so it learns constantly and remembers nothing - and it fails without
     // any symptom except the product quietly never improving.
-    for (const id of ['id=:r7:', 'id=radix-:r3:', 'id=a3f9c2e18b4d', 'id=1734']) {
-      const value = id.slice(3);
-      const described = describeOnly(`<textarea data-subject id="${value}"></textarea>`);
-      expect(described).not.toBe(id);
-      expect(described.startsWith('path=')).toBe(true);
+    for (const value of [':r7:', 'radix-:r3:', 'a3f9c2e18b4d', '1734']) {
+      expect(describeOnly(`<textarea data-subject id="${value}"></textarea>`)).toBeNull();
     }
   });
 
-  it('falls back to a bounded structural path when the field has no name', () => {
-    const described = describeOnly('<div><section><p><textarea data-subject></textarea></p></section></div>');
+  it('gives an unnamed box no name of its own', () => {
+    // It used to get a bounded path through the tree, which reads as thorough and behaves as
+    // churn: the path changes the moment a page wraps something in another element, and an
+    // identity that moves learns constantly and remembers nothing.
+    expect(describeOnly('<div><section><p><textarea data-subject></textarea></p></section></div>')).toBeNull();
+  });
 
-    expect(described.startsWith('path=')).toBe(true);
-    // Bounded on purpose: a path from the document root is more unique and far less stable,
-    // because sites add wrapper elements between visits.
-    expect(described.split('/').length).toBeLessThanOrEqual(4);
+  it('gives every unnamed box in one document the same identity', () => {
+    document.body.innerHTML = '<div><textarea></textarea><p><textarea></textarea></p></div>';
+    const where = { origin: 'https://docs.example', pathname: '/d/abc', hash: '' };
+    const [first, second] = document.querySelectorAll('textarea');
+
+    // Two boxes, different places in the tree, neither carrying a name, one memory. That is the
+    // trade: a page with two anonymous boxes shares a language between them, which is a small loss
+    // beside a product that learns nothing at all.
+    expect(fieldIdentity(where, first!)).toBe(fieldIdentity(where, second!));
+
+    // A box that does have a name still keeps its own.
+    document.body.insertAdjacentHTML('beforeend', '<input aria-label="Search">');
+    expect(fieldIdentity(where, document.querySelector('input')!)).not.toBe(
+      fieldIdentity(where, first!),
+    );
   });
 
   it('separates the same field description on two different sites', () => {
@@ -410,6 +476,18 @@ describe('document scope', () => {
     // aria-label, so all of Gmail was one remembered language. The key switched to English, then
     // to Hebrew, then back - always from ConversationMemory, never from the message on screen.
     expect(at('/mail/u/0/', '#inbox/FMfcgzAAAA')).not.toBe(at('/mail/u/0/', '#inbox/FMfcgzBBBB'));
+  });
+
+  it('treats a spreadsheet as one document however the selection moves', () => {
+    // A live Google Sheet reads `#gid=0`: the sheet tab within the file. Every tab of one
+    // spreadsheet should therefore share a memory, and a view parameter should never mint a
+    // conversation - which is the same rule the query string already follows.
+    const sheet = '/spreadsheets/d/1AbC/edit';
+    expect(at(sheet, '#gid=0')).toBe(at(sheet, '#gid=3'));
+    expect(at(sheet, '#gid=0')).toBe(at(sheet));
+
+    // A different spreadsheet is still a different document.
+    expect(at(sheet, '#gid=0')).not.toBe(at('/spreadsheets/d/9XyZ/edit', '#gid=0'));
   });
 
   it('keeps one search box across different searches', () => {
@@ -434,7 +512,7 @@ describe('the privacy contract holds for arbitrary pages', () => {
     document.body.innerHTML = '<textarea data-subject name="comment"></textarea>';
     const element = document.querySelector<HTMLElement>('[data-subject]')!;
     element.focus();
-    document.body.insertAdjacentHTML('beforeend', `<p>${HEBREW}</p>`);
+    document.body.insertAdjacentHTML('beforeend', `<p>${HEBREW_PAGE}</p>`);
 
     const reading = new GenericAdapter().read();
     const serialised = JSON.stringify(reading.messages);

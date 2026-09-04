@@ -47,6 +47,10 @@ public enum DecisionBlocker
     NotForeground,
     UserTyping,
     ManualCooldown,
+
+    /// <summary>The user changed the layout by hand, and we are getting out of the way.</summary>
+    ManualChange,
+
     LowConfidence,
     NoSignal,
     Hysteresis,
@@ -78,6 +82,15 @@ public sealed record Decision
     /// save without the engine reaching for storage itself.
     /// </summary>
     public Language LearnedLanguage { get; init; } = Language.Unknown;
+
+    /// <summary>
+    /// True when the layout changed to something we did not ask for, which can only be the user.
+    ///
+    /// Separate from LearnedLanguage because it means more than "remember this": it starts the
+    /// cooldown of PDR section 12, so the product stops arguing for a while rather than switching
+    /// back on the next observation.
+    /// </summary>
+    public bool UserOverrode { get; init; }
 
     public bool ShouldSwitch => Outcome == DecisionOutcome.Switch;
 

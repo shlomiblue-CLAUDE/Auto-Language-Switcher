@@ -161,8 +161,17 @@ public sealed class AgentCore
             var site = _store.GetSite(signal.Site);
             var decision = _engine.Decide(request, _store.Settings, preference, site);
 
-            if (decision.LearnedLanguage != Language.Unknown)
+            if (decision.UserOverrode)
+            {
+                // Records the language and starts the cooldown in one call, which is the whole
+                // difference between remembering what the user did and getting out of their way
+                // while they do it.
+                _store.NoteManualOverride(signal.ConversationKey, decision.LearnedLanguage);
+            }
+            else if (decision.LearnedLanguage != Language.Unknown)
+            {
                 _store.RememberLanguage(signal.ConversationKey, decision.LearnedLanguage);
+            }
 
             _store.RecordDecision(signal.Site, decision);
 

@@ -136,19 +136,76 @@ public class DecisionEngineTests
     }
 
     [Fact]
-    public void Typing_in_a_layout_the_user_chose_still_teaches()
+    public void A_layout_the_user_chose_is_learned_and_ends_the_argument()
     {
-        // The other side of the rule, and the reason it is safe. A user who disagrees with a
-        // switch changes the layout themselves; the layout in use is then no longer ours, and the
-        // very next keystroke is learned normally.
+        // The other side of the anti-echo rule, and the reason it is safe. A user who disagrees
+        // with a switch changes the layout themselves; the layout in use is then no longer ours,
+        // and what they chose is learned.
         var switched = Decide(Request([Outgoing(Language.Hebrew, 30)], currentLayout: Language.English));
         Assert.Equal(Language.Hebrew, switched.Language);
 
         // They disagree and set English back by hand, then type.
         var typing = Decide(Request(composerEmpty: false, currentLayout: Language.English));
 
-        Assert.Equal(DecisionBlocker.UserTyping, typing.Blocker);
         Assert.Equal(Language.English, typing.LearnedLanguage);
+
+        // Reported as ManualChange rather than UserTyping. Both are true in this moment and this
+        // one says more: it is the rarer signal, and it is the one that starts the cooldown so the
+        // product stops arguing instead of switching back on the next observation.
+        Assert.Equal(DecisionBlocker.ManualChange, typing.Blocker);
+        Assert.True(typing.UserOverrode);
+    }
+
+    [Fact]
+    public void A_manual_change_is_noticed_even_where_no_composer_is_ever_occupied()
+    {
+        // The failure this exists for, from five hours of a real log. Google Sheets draws its grid
+        // on a canvas, so the composer is reported empty no matter what the user types; nothing was
+        // ever learned, memory never formed, and a few hundred letters of Google's English
+        // interface won every round at full confidence. The user set Hebrew by hand four times and
+        // was dragged back to English four times.
+        var switched = Decide(Request([Outgoing(Language.English, 30)], currentLayout: Language.Hebrew));
+        Assert.Equal(Language.English, switched.Language);
+
+        // The composer stays empty throughout - that is the whole point - and the layout is now
+        // Hebrew, which we did not ask for.
+        var overridden = Decide(Request(currentLayout: Language.Hebrew));
+
+        Assert.Equal(DecisionOutcome.Suppressed, overridden.Outcome);
+        Assert.Equal(DecisionBlocker.ManualChange, overridden.Blocker);
+        Assert.Equal(Language.Hebrew, overridden.LearnedLanguage);
+        Assert.True(overridden.UserOverrode);
+    }
+
+    [Fact]
+    public void The_product_does_not_switch_back_after_the_user_moves_the_layout()
+    {
+        // The symptom, stated directly: whatever the page says, the next observation must not undo
+        // what the user just did by hand.
+        //
+        // Detection and enforcement are two different things, and writing this test is what made
+        // that obvious. The engine notices the change and says so; what actually stops the next
+        // switch is the cooldown, which lives in the stored preference. AgentCore writes it on
+        // seeing UserOverrode, so this stands in for that round trip.
+        Decide(Request([Outgoing(Language.English, 30)], currentLayout: Language.Hebrew));
+
+        var overridden = Decide(Request(currentLayout: Language.Hebrew));
+        Assert.True(overridden.UserOverrode);
+
+        var asStored = new ConversationPreference
+        {
+            LastReliableLanguage = overridden.LearnedLanguage,
+            ManualOverrideAt = _clock.Now,
+            UpdatedAt = _clock.Now,
+        };
+
+        _clock.Advance(TimeSpan.FromSeconds(5));
+        var next = Decide(
+            Request([Outgoing(Language.English, 30)], currentLayout: Language.Hebrew),
+            preference: asStored);
+
+        Assert.NotEqual(DecisionOutcome.Switch, next.Outcome);
+        Assert.Equal(DecisionBlocker.ManualCooldown, next.Blocker);
     }
 
     [Fact]

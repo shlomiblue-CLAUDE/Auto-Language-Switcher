@@ -359,4 +359,36 @@ public class AgentCoreTests : IDisposable
         Assert.DoesNotContain("counts", reply, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("text", reply, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void A_layout_the_user_set_by_hand_is_stored_and_stops_the_argument()
+    {
+        // The whole loop, not the engine's half of it. The engine notices that the layout moved to
+        // something it did not ask for; what makes the product stop switching back is this class
+        // writing the override into the store, and nothing tested that branch.
+        //
+        // Modelled on five hours of a real log in Google Sheets, where the grid is a canvas so the
+        // composer never reads as occupied: the user set Hebrew by hand four times and was pulled
+        // back to English four times.
+        _core.Handle(Signal(language: "English", letters: 40));
+        Assert.Equal(Language.English, _layouts.Current);
+
+        // The user reaches for Alt+Shift. The page has not changed and the composer is still empty.
+        _layouts.Current = Language.Hebrew;
+        var reply = Parse<DecisionMessage>(_core.Handle(Signal(language: "English", letters: 40)));
+
+        Assert.Equal(nameof(DecisionOutcome.Suppressed), reply.Outcome);
+        Assert.Equal(nameof(DecisionBlocker.ManualChange), reply.Blocker);
+
+        var stored = _store.GetConversation(HashedKey);
+        Assert.NotNull(stored);
+        Assert.Equal(Language.Hebrew, stored!.LastReliableLanguage);
+        Assert.NotNull(stored.ManualOverrideAt);
+
+        // And the next observation leaves the layout where the user put it.
+        _clock.Advance(TimeSpan.FromSeconds(5));
+        _core.Handle(Signal(language: "English", letters: 40));
+
+        Assert.Equal(Language.Hebrew, _layouts.Current);
+    }
 }

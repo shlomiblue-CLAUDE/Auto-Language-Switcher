@@ -15,9 +15,6 @@
 /** Long enough to stay distinctive, short enough that a stray label cannot dominate. */
 const MAX_DESCRIPTOR = 120;
 
-/** How far up the tree the structural fallback walks before it stops being stable. */
-const MAX_DEPTH = 4;
-
 /**
  * Values that identify this render rather than this field.
  *
@@ -47,51 +44,27 @@ function candidate(element: Element, attribute: string): string | null {
 }
 
 /**
- * Position in the tree, used when the field carries no name of its own.
- *
- * Bounded on purpose. A full path from the root is more unique and far less stable: sites wrap
- * content in extra layers between visits, and every wrapper would invent a new field. Four levels
- * is enough to separate the two textareas on a page and shallow enough to survive a redesign of
- * everything above them.
- */
-function structuralPath(element: Element): string {
-  const parts: string[] = [];
-  let node: Element | null = element;
-
-  for (let depth = 0; node && depth < MAX_DEPTH && node !== document.body; depth++) {
-    const parent: Element | null = node.parentElement;
-
-    let index = 1;
-    if (parent) {
-      for (const sibling of Array.from(parent.children)) {
-        if (sibling === node) break;
-        if (sibling.tagName === node.tagName) index++;
-      }
-    }
-
-    const role = node.getAttribute('role');
-    parts.unshift(`${node.tagName.toLowerCase()}${role ? `[${role}]` : ''}:${index}`);
-    node = parent;
-  }
-
-  return `path=${parts.join('/')}`;
-}
-
-/**
  * Describes a field, in descending order of how likely the answer is to survive a reload.
  *
  * An accessible name comes first because it is written by a human for a human and therefore
- * changes when the field's purpose changes, which is exactly when we want to forget. The
- * structural path is last because it is the only one that always exists.
+ * changes when the field's purpose changes, which is exactly when we want to forget.
+ *
+ * Null when the field has no name at all, rather than a bounded path through the tree. A path
+ * reads as thorough and behaves as churn: it changes whenever the page puts a wrapper around
+ * something, and a field whose identity changes learns constantly and remembers nothing.
+ *
+ * An unnamed box therefore belongs to its document rather than to itself. Two unnamed boxes on one
+ * page share a memory, which is a real loss and a small one beside an identity that does not hold
+ * still. A live Google Sheet has two such boxes among its eight.
  */
-export function describeField(element: Element): string {
+export function describeField(element: Element): string | null {
   return (
     candidate(element, 'aria-label') ??
     candidate(element, 'name') ??
     candidate(element, 'id') ??
     candidate(element, 'data-testid') ??
     candidate(element, 'placeholder') ??
-    structuralPath(element)
+    null
   );
 }
 
@@ -119,7 +92,19 @@ const MAX_SCOPE = 120;
  */
 export function documentScope(location: { pathname: string; hash: string }): string {
   const path = location.pathname.replace(/\/+$/, '');
-  const fragment = location.hash.replace(/^#/, '');
+
+  // Parameters inside the fragment are dropped for the same reason as the query string:
+  // `key=value` describes a view of a document, and what is left names the document itself.
+  //
+  // A live Google Sheet reads `#gid=0` - the sheet tab within the file - so every tab of one
+  // spreadsheet shares a memory, which is what a user of that file would expect. Gmail's
+  // `#inbox/FMfcgz...` carries no parameters and survives this untouched.
+  const fragment = location.hash
+    .replace(/^#/, '')
+    .split('&')
+    .filter((part) => part.length > 0 && !part.includes('='))
+    .join('&');
+
   const scope = fragment ? `${path}#${fragment}` : path;
 
   return scope.slice(0, MAX_SCOPE);
@@ -136,5 +121,6 @@ export function fieldIdentity(
   location: { origin: string; pathname: string; hash: string },
   element: Element,
 ): string {
-  return `${location.origin}${documentScope(location)}|${describeField(element)}`;
+  const field = describeField(element);
+  return `${location.origin}${documentScope(location)}${field ? `|${field}` : ''}`;
 }

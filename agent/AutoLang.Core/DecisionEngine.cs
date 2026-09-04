@@ -26,6 +26,22 @@ public sealed class DecisionEngine
     /// </summary>
     private Language _layoutWeImposed = Language.Unknown;
 
+    /// <summary>
+    /// The layout in effect the last time we looked, and the conversation we were looking at.
+    ///
+    /// This is how a manual change is noticed at all. Between two observations of the *same*
+    /// conversation the only thing that can move the layout is us or the user, and we know when it
+    /// was us - so a different value that we did not set is the user reaching for Alt+Shift.
+    ///
+    /// Both halves are needed. Comparing layouts alone attributes any change to whatever
+    /// conversation happens to be in view, so moving between two conversations while the layout
+    /// differs would be read as an override and put the arriving conversation into a five minute
+    /// cooldown it never earned. A stability test that walks several conversations caught that.
+    /// </summary>
+    private string? _lastObservedIn;
+
+    private Language _lastObservedLayout = Language.Unknown;
+
     public DecisionEngine(IClock? clock = null, LanguageDetector? detector = null)
     {
         _clock = clock ?? SystemClock.Instance;
@@ -50,6 +66,54 @@ public sealed class DecisionEngine
         // as readily as a foreground one. If we do not refuse here, nothing will.
         if (!request.BrowserIsForeground)
             return Suppressed(DecisionBlocker.NotForeground);
+
+        // --- The user changed the layout themselves. ---
+        //
+        // PDR section 18 asks the product to back off when this happens, the store listing promises
+        // it in those words, and NoteManualChange below has always implemented it. Nothing ever
+        // called it: a manual change was only ever noticed through the typing guard, which needs a
+        // non-empty composer. That covers a chat, where the user types into a box we can read.
+        //
+        // It does not cover an application that keeps its text somewhere we cannot see. Google
+        // Sheets draws its grid on a canvas and never reports a composer as occupied, so nothing
+        // was ever learned there, memory never formed, and the weak fallback - reading a few
+        // hundred letters of Google's own English interface at full confidence - won every round.
+        // A log of one spreadsheet shows the user setting Hebrew by hand and the product dragging
+        // them back to English four times over five hours. A keyboard switcher that overrules the
+        // keyboard is worse than one that does nothing.
+        //
+        // A layout that differs from the one seen last, which we did not set, can only be the
+        // user - this is reached with the browser in front. That is not merely a reason to stop:
+        // it is the clearest statement of intent available about this conversation, so it is
+        // learned as well.
+        //
+        // Compared against the layout last *seen*, not the last one imposed, and that distinction
+        // is the whole check. A layout is only imposed by switching; when a conversation is already
+        // on the right one the engine reports AlreadyCorrect and imposes nothing. Keyed on the
+        // imposed layout, a user who moved it by hand from an already-correct state would not be
+        // noticed at all - the same defect, entering by a different door. Writing the test against
+        // that assumption is what found it.
+        var userMovedTheLayout =
+            _lastObservedIn == request.ConversationKey
+            && _lastObservedLayout != Language.Unknown
+            && request.CurrentLayout != Language.Unknown
+            && request.CurrentLayout != _lastObservedLayout;
+
+        _lastObservedIn = request.ConversationKey;
+        _lastObservedLayout = request.CurrentLayout;
+
+        if (userMovedTheLayout)
+        {
+            NoteManualChange(request.CurrentLayout);
+
+            return new Decision
+            {
+                Outcome = DecisionOutcome.Suppressed,
+                Blocker = DecisionBlocker.ManualChange,
+                LearnedLanguage = request.CurrentLayout,
+                UserOverrode = true,
+            };
+        }
 
         // --- The typing guard, which is also the moment we learn. ---
 
@@ -121,6 +185,10 @@ public sealed class DecisionEngine
         _lastSwitchAt = now;
         _lastSwitchLanguage = language;
         _layoutWeImposed = language;
+
+        // Our own switch, recorded as observed. Without this the very next signal would see the
+        // layout differ from the last observation and blame the user for what we just did.
+        _lastObservedLayout = language;
 
         return new Decision
         {
@@ -238,6 +306,7 @@ public sealed class DecisionEngine
     {
         _lastSwitchAt = _clock.Now;
         _lastSwitchLanguage = language;
+        _lastObservedLayout = language;
 
         // The layout is theirs again, so the typing guard may learn from it. This is the release
         // valve that keeps the anti-echo rule above from freezing a conversation on a wrong guess.

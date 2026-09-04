@@ -42,6 +42,27 @@ const SAMPLE_CHAR_LIMIT = 4_000;
 const MIN_CONTEXT_LETTERS = 200;
 
 /**
+ * How much visible text there must be before this adapter claims to have read anything.
+ *
+ * Confidence is a ratio, so a handful of letters that all belong to one alphabet is reported as
+ * certainty. The detector already guards against that with MinWeightedLetters, but five letters is
+ * the right bar for a chat message and far too low for a page sample: a spreadsheet whose grid is a
+ * canvas yielded 29 visible letters of leftover interface and the engine switched to English at
+ * confidence 1.00, four separate times, while the user was typing Hebrew in a cell.
+ *
+ * Note where this sits. Climbing to a context already requires MIN_CONTEXT_LETTERS, but falling
+ * back to the body had no floor at all - it took whatever was there. This is that missing floor,
+ * and it is the difference between weak evidence and none. Below it the adapter reports no
+ * messages, the engine's global default is all that is left, and the layout is left alone.
+ *
+ * Calibrated against measured pages rather than chosen: 29 letters on a Google Sheet is noise,
+ * while a small real page measured 101, a Gmail thread 326 to 1497, and a search page 3247. The
+ * bar sits with margin on both sides of that gap, and it is the kind of number that should be
+ * re-measured rather than trusted.
+ */
+const MIN_EVIDENCE_LETTERS = 60;
+
+/**
  * Elements that carry an application rather than its content.
  *
  * This is the part that actually separates a message from the interface around it, and tuning a
@@ -129,6 +150,31 @@ function isWritingField(element: Element): boolean {
   return isContentEditable(element);
 }
 
+/**
+ * True for text the user can actually see.
+ *
+ * The rule this encodes is the whole of it: the language somebody is about to write is informed by
+ * what is in front of them. A closed menu, a hidden banner and a screen-reader-only hint are not.
+ *
+ * A TreeWalker reads text inside `display:none`, and on Google Sheets that turned out to be all
+ * there was. Measured on a live blank spreadsheet, the sampler collected 333 characters and every
+ * one of them was invisible: "A browser error has occurred", "Turn on screen reader support", and
+ * the account panel - which is where the user's own name and email address were being counted from.
+ * Filtered on visibility the same page yields 13 characters, far below any bar, so the product
+ * declines to decide instead of reading Google's English interface as the language of a
+ * spreadsheet.
+ *
+ * `checkVisibility` accounts for ancestors, so only the text node's own parent needs asking. Where
+ * it does not exist - jsdom, and engines older than this extension supports - everything counts,
+ * which is the behaviour that came before.
+ */
+function isVisible(element: Element): boolean {
+  const check = (element as { checkVisibility?: (options?: unknown) => boolean }).checkVisibility;
+  if (typeof check !== 'function') return true;
+
+  return check.call(element, { checkOpacity: true, checkVisibilityCSS: true });
+}
+
 /** True for a node that belongs to the application's furniture rather than its content. */
 function isChrome(element: Element): boolean {
   if (CHROME_TAGS.has(element.tagName)) return true;
@@ -152,6 +198,10 @@ function collectText(container: Element, exclude: Element, charLimit: number, no
 
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
 
+  // Many text nodes share a parent, and asking about visibility costs a layout. Once per element
+  // is enough.
+  const seen = new Map<Element, boolean>();
+
   while (total < charLimit && visited < nodeLimit) {
     const node = walker.nextNode();
     if (!node) break;
@@ -160,8 +210,18 @@ function collectText(container: Element, exclude: Element, charLimit: number, no
     const value = node.nodeValue?.trim();
     if (!value) continue;
 
+    const parent = node.parentElement;
+    if (!parent) continue;
+
+    let visible = seen.get(parent);
+    if (visible === undefined) {
+      visible = isVisible(parent);
+      seen.set(parent, visible);
+    }
+    if (!visible) continue;
+
     let skip = false;
-    for (let el = node.parentElement; el && el !== container.parentElement; el = el.parentElement) {
+    for (let el: Element | null = parent; el && el !== container.parentElement; el = el.parentElement) {
       // The user's own typing, here or in any other box on the page. Counting it would smuggle
       // their words in through the one channel meant to carry somebody else's.
       if (el === exclude || isContentEditable(el) || NON_TEXT_TAGS.has(el.tagName) || isChrome(el)) {
@@ -253,16 +313,17 @@ export class GenericAdapter implements SiteAdapter {
     return {
       rawConversationId: identity,
       messages:
-        relevantLetters(counts) > 0
+        relevantLetters(counts) >= MIN_EVIDENCE_LETTERS
           ? // Incoming, because that is what this is: words the user did not write. The engine
             // holds incoming evidence to a higher bar before acting on it, and refuses to commit
             // it to memory - precisely the treatment a page's own language deserves. Both rules
             // already exist and were paid for once: a previous version of this product learned
             // from the other side's language and got steadily worse until the store was cleared.
             [{ direction: 'incoming' as const, counts, index: 0 }]
-          : // No letters anywhere on the page. Reporting no messages at all - rather than an empty
-            // one - is what lets the engine's global default apply, since it only fires when
-            // nothing whatsoever was observed.
+          : // Not enough visible text to mean anything. Reporting no messages at all - rather than
+            // a thin one - is what lets the engine's global default apply, since it only fires
+            // when nothing whatsoever was observed, and what stops a ratio over a few letters
+            // being handed back as certainty.
             [],
       composerEmpty: empty,
     };
