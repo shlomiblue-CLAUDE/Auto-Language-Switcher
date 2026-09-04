@@ -201,11 +201,13 @@ public class AgentCoreTests : IDisposable
         {
             Command = "setMode",
             ConversationKey = HashedKey,
-            Mode = "AlwaysHebrew",
+            Mode = "Pinned",
+            LanguageTag = "he-IL",
         }, Wire.Json);
 
         var state = Parse<StateMessage>(_core.Handle(command));
-        Assert.Equal("AlwaysHebrew", state.ConversationMode);
+        Assert.Equal("Pinned", state.ConversationMode);
+        Assert.Equal("he-IL", state.PinnedLanguage);
 
         var reply = Parse<DecisionMessage>(_core.Handle(Signal(language: "English", letters: 200)));
         Assert.Equal("he-IL", reply.Language);

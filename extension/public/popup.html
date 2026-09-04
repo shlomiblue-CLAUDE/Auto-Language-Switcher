@@ -59,10 +59,11 @@
 
     <section class="panel" aria-labelledby="mode-label">
       <h2 id="mode-label">Language for this conversation</h2>
+      <!-- Auto is the only fixed button. The rest are built from the layouts Windows reports and
+           the languages the user has enabled, because a pin that offers two languages to somebody
+           who writes in three is a control that lies about what the product can do. -->
       <div class="modes" role="group" aria-labelledby="mode-label">
-        <button type="button" class="mode" data-mode="Auto" aria-pressed="false">Auto</button>
-        <button type="button" class="mode" data-mode="AlwaysHebrew" aria-pressed="false" lang="he">עברית</button>
-        <button type="button" class="mode" data-mode="AlwaysEnglish" aria-pressed="false">English</button>
+        <button type="button" id="mode-auto" class="mode" data-mode="Auto" aria-pressed="false">Auto</button>
       </div>
     </section>
 

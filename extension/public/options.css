@@ -1,0 +1,15 @@
+
+/* Language choices. One row per layout Windows reports, so the list length is not ours to know. */
+.languages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 6px 0 10px;
+}
+
+.languages .checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}

@@ -29,10 +29,33 @@ public static class ScriptTable
         [
             new ScriptRange(0x0041, 0x005A),   // A-Z
             new ScriptRange(0x0061, 0x007A)    // a-z
+        ]),
+
+        new(Language.Russian, "Cyrillic",
+        [
+            new ScriptRange(0x0400, 0x04FF)    // Cyrillic; covers Russian in full
+        ]),
+
+        new(Language.Arabic, "Arabic",
+        [
+            new ScriptRange(0x0600, 0x06FF),   // Arabic
+            new ScriptRange(0x0750, 0x077F),   // Arabic Supplement
+
+            // Presentation forms, which is how a lot of older text and many PDFs arrive. Deliberately
+            // stopping below FB50: Hebrew's presentation forms sit at FB1D-FB4F, immediately before.
+            new ScriptRange(0xFB50, 0xFDFF),
+            new ScriptRange(0xFE70, 0xFEFF)
+        ]),
+
+        new(Language.Greek, "Greek",
+        [
+            new ScriptRange(0x0370, 0x03FF),   // Greek and Coptic
+            new ScriptRange(0x1F00, 0x1FFF)    // Greek Extended, for polytonic text
         ])
 
-        // Future: new(Language.Russian, "Cyrillic", [new ScriptRange(0x0400, 0x04FF)])
-        // Future: new(Language.Arabic,  "Arabic",   [new ScriptRange(0x0600, 0x06FF)])
+        // The IsLetter filter below earns its keep again here. Arabic harakat (U+064B-U+0652) are
+        // NonSpacingMark exactly as Hebrew niqqud are, so vocalised Arabic is counted by its letters
+        // rather than by its marks.
     ];
 
     /// <summary>

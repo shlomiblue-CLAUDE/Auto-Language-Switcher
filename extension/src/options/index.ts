@@ -13,6 +13,7 @@ interface AgentState {
   enabled?: boolean;
   currentLayout?: string;
   availableLayouts?: string[];
+  enabledLanguages?: string[];
   defaultLanguage?: string;
   confidenceThreshold?: number;
   showIndicator?: boolean;
@@ -27,6 +28,9 @@ const $ = <T extends HTMLElement>(id: string): T => {
 const LABELS: Record<string, string> = {
   'he-IL': 'Hebrew',
   'en-US': 'English',
+  'ru-RU': 'Russian',
+  'ar-SA': 'Arabic',
+  'el-GR': 'Greek',
   unknown: 'None',
 };
 
@@ -81,7 +85,63 @@ function render(state: AgentState): void {
     ? available.map((tag) => LABELS[tag] ?? tag).join(', ')
     : 'none detected';
 
+  renderLanguageChoices(available, state.enabledLanguages ?? [], state.defaultLanguage ?? 'unknown');
+
   loaded = true;
+}
+
+/**
+ * The language controls, built from what Windows actually has.
+ *
+ * Both this and the default-language list are filled from the same source, so neither can offer a
+ * language that would fail to apply. A fixed list of two was fine when the product knew two.
+ *
+ * An empty stored list means every language, which is the default and has to look like every box
+ * ticked rather than none - the opposite reading would tell a new user their product is switched
+ * off.
+ */
+function renderLanguageChoices(available: string[], enabledTags: string[], defaultTag: string): void {
+  const all = enabledTags.length === 0;
+  const container = $('enabled-languages');
+  container.textContent = '';
+
+  for (const tag of available) {
+    const label = document.createElement('label');
+    label.className = 'checkbox';
+
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.value = tag;
+    box.checked = all || enabledTags.includes(tag);
+    box.addEventListener('change', () => void save());
+
+    label.append(box, document.createTextNode(` ${LABELS[tag] ?? tag}`));
+    container.appendChild(label);
+  }
+
+  // Rebuilt here too, so the two lists can never disagree about what exists.
+  defaultLanguage.textContent = '';
+  const none = document.createElement('option');
+  none.value = 'unknown';
+  none.textContent = 'Leave the keyboard alone';
+  defaultLanguage.appendChild(none);
+
+  for (const tag of available) {
+    const option = document.createElement('option');
+    option.value = tag;
+    option.textContent = LABELS[tag] ?? tag;
+    defaultLanguage.appendChild(option);
+  }
+  defaultLanguage.value = defaultTag;
+}
+
+function chosenLanguages(): string[] {
+  const boxes = [...$('enabled-languages').querySelectorAll<HTMLInputElement>('input[type=checkbox]')];
+  const ticked = boxes.filter((b) => b.checked).map((b) => b.value);
+
+  // Every box ticked is stored as "no restriction" rather than as a list, so adding a layout in
+  // Windows later is allowed by default instead of silently excluded.
+  return ticked.length === boxes.length ? [] : ticked;
 }
 
 async function save(): Promise<void> {
@@ -99,6 +159,7 @@ async function save(): Promise<void> {
     defaultLanguage: defaultLanguage.value,
     confidenceThreshold: Number(threshold.value) / 100,
     showIndicator: showIndicator.checked,
+    enabledLanguages: chosenLanguages(),
   });
 
   saveStatus.textContent = reply ? 'Saved' : 'Could not save';

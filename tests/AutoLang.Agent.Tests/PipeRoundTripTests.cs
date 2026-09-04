@@ -195,13 +195,14 @@ public class PipeRoundTripTests : IDisposable
         {
             Command = "setMode",
             ConversationKey = HashedKey,
-            Mode = "AlwaysHebrew",
+            Mode = "Pinned",
+            LanguageTag = "he-IL",
         }, Wire.Json);
 
         await NativeMessagingCodec.WriteAsync(client, command);
         var reply = await NativeMessagingCodec.ReadAsync(client);
 
         var state = JsonSerializer.Deserialize<StateMessage>(reply!, Wire.Json)!;
-        Assert.Equal("AlwaysHebrew", state.ConversationMode);
+        Assert.Equal("Pinned", state.ConversationMode);
     }
 }

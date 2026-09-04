@@ -145,6 +145,12 @@ public sealed class DecisionEngine
 
         var (language, confidence, source) = ChooseLanguage(request, settings, preference);
 
+        // A language the user has switched off is not a candidate, whatever the evidence said.
+        // Applied here rather than inside each source so there is one place to read: the settings
+        // filter what may be applied, never what may be believed.
+        if (language != Language.Unknown && !IsEnabled(language, settings))
+            return Suppressed(DecisionBlocker.LanguageDisabled, source, confidence);
+
         // A pin is the user's explicit instruction, so it outranks the cooldown that exists to
         // stop us arguing with them. Every other source must wait the cooldown out.
         if (source != DecisionSource.ManualPin && IsInManualCooldown(preference, settings, request.ObservedAt))
@@ -214,7 +220,7 @@ public sealed class DecisionEngine
         ConversationPreference? preference)
     {
         // 1. Manual pin.
-        if (preference?.PinnedLanguage is { } pinned)
+        if (preference?.Pin is { } pinned)
             return (pinned, 1.0, DecisionSource.ManualPin);
 
         // 2. What they were typing with last time, while it is still fresh.
@@ -253,6 +259,10 @@ public sealed class DecisionEngine
 
         return (Language.Unknown, outgoingResult.Confidence, source);
     }
+
+    /// <summary>Empty means every language Windows has, which is what a first run wants.</summary>
+    private static bool IsEnabled(Language language, Settings settings) =>
+        settings.EnabledLanguages.Count == 0 || settings.EnabledLanguages.Contains(language);
 
     private LanguageDetector DetectorFor(Settings settings) =>
         Math.Abs(settings.ConfidenceThreshold - DetectionOptions.Default.ConfidenceThreshold) < 0.0001

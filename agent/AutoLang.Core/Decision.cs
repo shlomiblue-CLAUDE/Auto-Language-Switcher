@@ -52,6 +52,11 @@ public enum DecisionBlocker
     ManualChange,
 
     LowConfidence,
+
+    /// <summary>The evidence pointed at a language the user has switched off.</summary>
+    LanguageDisabled,
+
+
     NoSignal,
     Hysteresis,
     AlreadyCorrect

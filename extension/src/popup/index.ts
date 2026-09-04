@@ -14,6 +14,7 @@ interface AgentState {
   enabled?: boolean;
   currentLayout?: string;
   conversationMode?: string;
+  pinnedLanguage?: string;
   rememberedLanguage?: string;
   sitePaused?: boolean;
   availableLayouts?: string[];
@@ -41,16 +42,25 @@ const $ = <T extends HTMLElement>(id: string): T => {
 };
 
 const LANGUAGE_LABELS: Record<string, string> = {
-  [LANGUAGE_TAGS.Hebrew]: 'Hebrew',
+  [LANGUAGE_TAGS.Hebrew]: 'עברית',
   [LANGUAGE_TAGS.English]: 'English',
+  [LANGUAGE_TAGS.Russian]: 'Русский',
+  [LANGUAGE_TAGS.Arabic]: 'العربية',
+  [LANGUAGE_TAGS.Greek]: 'Ελληνικά',
   unknown: 'Not decided',
 };
 
 const SHORT_LABELS: Record<string, string> = {
   [LANGUAGE_TAGS.Hebrew]: 'HE',
   [LANGUAGE_TAGS.English]: 'EN',
+  [LANGUAGE_TAGS.Russian]: 'RU',
+  [LANGUAGE_TAGS.Arabic]: 'AR',
+  [LANGUAGE_TAGS.Greek]: 'EL',
   unknown: '—',
 };
+
+/** Right-to-left languages, so a pinned label renders the way it is read. */
+const RTL_TAGS = new Set<string>([LANGUAGE_TAGS.Hebrew, LANGUAGE_TAGS.Arabic]);
 
 /**
  * Blockers and sources in the user's terms.
@@ -65,6 +75,7 @@ const REASONS: Record<string, string> = {
   UserTyping: 'You are in the middle of typing',
   ManualCooldown: 'You changed it yourself just now',
   LowConfidence: 'This conversation is too mixed to call',
+  LanguageDisabled: 'That language is switched off in settings',
   NoSignal: 'Not enough of your own messages yet',
   Hysteresis: 'Just switched, waiting a moment',
   AlreadyCorrect: 'Already on the right layout',
@@ -150,10 +161,11 @@ function render(state: AgentState): void {
   $('layout-badge').textContent = !state.enabled ? 'OFF' : paused ? 'PAUSED' : SHORT_LABELS[layout] ?? '—';
 
   const remembered = state.rememberedLanguage ?? 'unknown';
+  const pinnedTag = state.pinnedLanguage ?? 'unknown';
   $('conversation-language').textContent =
-    mode === 'AlwaysHebrew' ? 'Hebrew (pinned)'
-    : mode === 'AlwaysEnglish' ? 'English (pinned)'
-    : LANGUAGE_LABELS[remembered] ?? 'Not decided';
+    mode === 'Pinned'
+      ? `${LANGUAGE_LABELS[pinnedTag] ?? pinnedTag} (pinned)`
+      : LANGUAGE_LABELS[remembered] ?? 'Not decided';
 
   const decision = state.lastDecision;
   const confidence = decision?.confidence ?? 0;
@@ -164,15 +176,49 @@ function render(state: AgentState): void {
 
   $('reason').textContent = describe(state, decision);
 
-  for (const button of document.querySelectorAll<HTMLButtonElement>('.mode')) {
-    button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
-    button.disabled = false;
-  }
+  renderPinButtons(state, mode, state.pinnedLanguage ?? 'unknown');
 
   const pause = $<HTMLButtonElement>('pause-site');
   pause.disabled = false;
   pause.setAttribute('aria-pressed', String(paused));
   pause.textContent = paused ? 'Resume on this site' : 'Pause on this site';
+}
+
+/**
+ * One button per language the user could actually be switched to.
+ *
+ * Built from what the Agent reports Windows has installed rather than from a fixed list, so the
+ * control can never offer a language that would fail, nor hide one that would work. A user with a
+ * Greek layout gets a Greek pin without anything here knowing about Greek.
+ */
+function renderPinButtons(state: AgentState, mode: string, pinnedTag: string): void {
+  const container = document.querySelector<HTMLElement>('.modes');
+  if (!container) return;
+
+  const available = (state.availableLayouts ?? []).filter((tag) => tag in LANGUAGE_LABELS);
+
+  for (const stale of container.querySelectorAll('.mode[data-language]')) stale.remove();
+
+  for (const tag of available) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'mode';
+    button.dataset.language = tag;
+    button.textContent = LANGUAGE_LABELS[tag] ?? tag;
+    if (RTL_TAGS.has(tag)) button.dir = 'rtl';
+    button.addEventListener('click', () => {
+      if (!conversationKey) return;
+      void send({ command: 'setMode', conversationKey, mode: 'Pinned', language: tag });
+    });
+    container.appendChild(button);
+  }
+
+  for (const button of container.querySelectorAll<HTMLButtonElement>('.mode')) {
+    const isAuto = button.dataset.mode === 'Auto';
+    const pressed = isAuto ? mode !== 'Pinned' : mode === 'Pinned' && button.dataset.language === pinnedTag;
+    button.setAttribute('aria-pressed', String(pressed));
+    button.disabled = false;
+  }
 }
 
 function describe(state: AgentState, decision: AgentState['lastDecision']): string {
@@ -336,12 +382,12 @@ async function send(payload: Record<string, unknown>): Promise<void> {
   else await refresh();
 }
 
-for (const button of document.querySelectorAll<HTMLButtonElement>('.mode')) {
-  button.addEventListener('click', () => {
-    if (!conversationKey) return;
-    void send({ command: 'setMode', conversationKey, mode: button.dataset.mode });
-  });
-}
+// Only Auto is wired here; the language buttons are created per render and carry their own
+// handler, because which languages exist is not known until the Agent answers.
+$('mode-auto')?.addEventListener('click', () => {
+  if (!conversationKey) return;
+  void send({ command: 'setMode', conversationKey, mode: 'Auto' });
+});
 
 $('site-access').addEventListener('click', () => {
   const pattern = sitePattern;

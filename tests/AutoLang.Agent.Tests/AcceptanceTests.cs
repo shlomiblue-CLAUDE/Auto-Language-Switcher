@@ -206,7 +206,8 @@ public class AcceptanceTests : IDisposable
         {
             Command = "setMode",
             ConversationKey = Supplier,
-            Mode = "AlwaysHebrew",
+            Mode = "Pinned",
+            LanguageTag = "he-IL",
         }, Wire.Json));
 
         _layouts.Current = Language.English;

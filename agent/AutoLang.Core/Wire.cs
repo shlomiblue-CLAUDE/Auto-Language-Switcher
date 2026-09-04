@@ -129,6 +129,9 @@ public sealed class CommandMessage
     [JsonPropertyName("defaultLanguage")] public string? DefaultLanguage { get; set; }
     [JsonPropertyName("confidenceThreshold")] public double? ConfidenceThreshold { get; set; }
     [JsonPropertyName("showIndicator")] public bool? ShowIndicator { get; set; }
+
+    /// <summary>Language tags the user allows. Absent leaves the setting alone; empty means all.</summary>
+    [JsonPropertyName("enabledLanguages")] public string[]? EnabledLanguages { get; set; }
 }
 
 public sealed class QueryMessage
@@ -162,12 +165,16 @@ public sealed class StateMessage
     [JsonPropertyName("enabled")] public bool Enabled { get; set; }
     [JsonPropertyName("currentLayout")] public string CurrentLayout { get; set; } = "unknown";
     [JsonPropertyName("conversationMode")] public string ConversationMode { get; set; } = "Auto";
+
+    /// <summary>Which language a pin names, now that the mode no longer spells it out.</summary>
+    [JsonPropertyName("pinnedLanguage")] public string PinnedLanguage { get; set; } = "unknown";
     [JsonPropertyName("rememberedLanguage")] public string RememberedLanguage { get; set; } = "unknown";
     [JsonPropertyName("sitePaused")] public bool SitePaused { get; set; }
     [JsonPropertyName("availableLayouts")] public List<string> AvailableLayouts { get; set; } = [];
     [JsonPropertyName("defaultLanguage")] public string DefaultLanguage { get; set; } = "unknown";
     [JsonPropertyName("confidenceThreshold")] public double ConfidenceThreshold { get; set; }
     [JsonPropertyName("showIndicator")] public bool ShowIndicator { get; set; }
+    [JsonPropertyName("enabledLanguages")] public string[] EnabledLanguages { get; set; } = [];
     [JsonPropertyName("lastDecision")] public DecisionMessage? LastDecision { get; set; }
 }
 

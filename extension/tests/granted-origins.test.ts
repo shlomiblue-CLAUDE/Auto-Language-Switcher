@@ -20,6 +20,10 @@ beforeAll(async () => {
     runtime: { onStartup: noop, onInstalled: noop, onMessage: noop },
     permissions: { getAll: async () => ({ origins: [] }), onAdded: noop, onRemoved: noop },
     scripting: { getRegisteredContentScripts: async () => [] },
+    // Session storage is what latches the once-per-load tab revival. Without it the module logs a
+    // caught TypeError on import, which is noise in every run - and noise is how a real warning
+    // gets missed.
+    storage: { session: { get: async () => ({}), set: async () => {} } },
     action: { setBadgeText: () => {}, setBadgeBackgroundColor: () => {}, setTitle: () => {} },
     tabs: { query: async () => [] },
   });

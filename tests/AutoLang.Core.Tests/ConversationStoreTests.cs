@@ -85,11 +85,12 @@ public class ConversationStoreTests : IDisposable
     [Fact]
     public void A_pinned_mode_survives_a_restart()
     {
-        _store.SetMode("conv-1", ConversationMode.AlwaysHebrew);
+        _store.SetMode("conv-1", ConversationMode.Pinned, Language.Hebrew);
 
         var preference = Reopen().GetConversation("conv-1");
 
-        Assert.Equal(ConversationMode.AlwaysHebrew, preference!.Mode);
+        Assert.Equal(ConversationMode.Pinned, preference!.Mode);
+        Assert.Equal(Language.Hebrew, preference.PinnedLanguage);
         Assert.Equal(Language.Hebrew, preference.PinnedLanguage);
     }
 
@@ -97,11 +98,12 @@ public class ConversationStoreTests : IDisposable
     public void Pinning_does_not_erase_what_was_already_learned()
     {
         _store.RememberLanguage("conv-1", Language.English);
-        _store.SetMode("conv-1", ConversationMode.AlwaysHebrew);
+        _store.SetMode("conv-1", ConversationMode.Pinned, Language.Hebrew);
 
         var preference = _store.GetConversation("conv-1")!;
 
-        Assert.Equal(ConversationMode.AlwaysHebrew, preference.Mode);
+        Assert.Equal(ConversationMode.Pinned, preference.Mode);
+        Assert.Equal(Language.Hebrew, preference.PinnedLanguage);
         Assert.Equal(Language.English, preference.LastReliableLanguage);
     }
 
@@ -309,11 +311,60 @@ public class ConversationStoreTests : IDisposable
         // The TTL exists because an observation goes stale. A pin is not an observation - it is an
         // instruction, and a user who pinned a conversation to Hebrew is entitled to find it still
         // pinned, however long they were away.
-        _store.SetMode("cccccccccccccccccccccccccccccccc", ConversationMode.AlwaysHebrew);
+        _store.SetMode("cccccccccccccccccccccccccccccccc", ConversationMode.Pinned, Language.Hebrew);
 
         _clock.Advance(_store.Settings.MemoryTtl * 3);
         _store.RememberLanguage("dddddddddddddddddddddddddddddddd", Language.English);
 
-        Assert.Equal(ConversationMode.AlwaysHebrew, Reopen().GetConversation("cccccccccccccccccccccccccccccccc")!.Mode);
+        Assert.Equal(ConversationMode.Pinned, Reopen().GetConversation("cccccccccccccccccccccccccccccccc")!.Mode);
+    }
+
+    [Fact]
+    public void A_store_written_before_pins_named_a_language_still_loads()
+    {
+        // The mode used to be Auto, AlwaysHebrew or AlwaysEnglish - one value per language, which
+        // stops working at the third. It is now Auto or Pinned with the language stored beside it.
+        //
+        // What matters here is not the pin. An unreadable enum fails the whole file, and that file
+        // holds every language the product has learned: fifty conversations of memory lost to one
+        // renamed constant. So an unrecognised mode reads as Auto and everything else survives.
+        // The pin is one click to restore; the memory is not.
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(
+            Path.Combine(_root, "conversations.json"),
+            """
+            {
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+                "Mode": "AlwaysHebrew",
+                "LastReliableLanguage": "Hebrew",
+                "UpdatedAt": "2026-09-01T10:00:00+00:00"
+              },
+              "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+                "Mode": "Auto",
+                "LastReliableLanguage": "English",
+                "UpdatedAt": "2026-09-01T10:00:00+00:00"
+              }
+            }
+            """);
+
+        var reopened = Reopen();
+
+        // The memory is what had to survive, and it did - for the pinned entry as well.
+        Assert.Equal(Language.Hebrew, reopened.GetConversation("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")!.LastReliableLanguage);
+        Assert.Equal(Language.English, reopened.GetConversation("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")!.LastReliableLanguage);
+
+        // The pin itself is not recoverable from a value that no longer exists, and reads as Auto
+        // rather than as a pin to nothing.
+        Assert.Equal(ConversationMode.Auto, reopened.GetConversation("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")!.Mode);
+        Assert.Null(reopened.GetConversation("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")!.Pin);
+    }
+
+    [Fact]
+    public void A_pin_can_name_any_language_the_product_knows()
+    {
+        // The point of the whole change: Russian could not be expressed at all before.
+        _store.SetMode("dddddddddddddddddddddddddddddddd", ConversationMode.Pinned, Language.Russian);
+
+        Assert.Equal(Language.Russian, Reopen().GetConversation("dddddddddddddddddddddddddddddddd")!.Pin);
     }
 }

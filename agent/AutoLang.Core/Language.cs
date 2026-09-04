@@ -3,8 +3,15 @@ using System.Text.Json.Serialization;
 namespace AutoLang.Core;
 
 /// <summary>
-/// A language the product can switch the keyboard to. v1 ships Hebrew and English; the detector
-/// and script table are structured so adding another is a data row, not a code change.
+/// A language the product can switch the keyboard to.
+///
+/// These are the languages whose *script* the detector can tell apart. That distinction is the
+/// limit of the method and worth stating plainly: Hebrew, Arabic, Cyrillic and Greek each have
+/// their own alphabet, so a page written in one is recognisable. French, German and Spanish are
+/// written in the same Latin alphabet as English and cannot be told from it by counting letters -
+/// they would need a different kind of evidence, and are not here.
+///
+/// Which of these the product may actually switch to is a user setting; see Settings.
 /// </summary>
 // Serialised by name, declared on the type so the source-generated contexts pick it up without
 // a converter in the options - the non-generic JsonStringEnumConverter is not trim-safe.
@@ -14,7 +21,10 @@ public enum Language
     /// <summary>Not enough evidence to choose. Callers must treat this as "change nothing".</summary>
     Unknown = 0,
     Hebrew,
-    English
+    English,
+    Russian,
+    Arabic,
+    Greek
 }
 
 public static class LanguageExtensions
@@ -24,6 +34,9 @@ public static class LanguageExtensions
     {
         Language.Hebrew => "he-IL",
         Language.English => "en-US",
+        Language.Russian => "ru-RU",
+        Language.Arabic => "ar-SA",
+        Language.Greek => "el-GR",
         _ => "unknown"
     };
 
@@ -31,6 +44,13 @@ public static class LanguageExtensions
     {
         "he" or "he-il" or "hebrew" => Language.Hebrew,
         "en" or "en-us" or "english" => Language.English,
+        "ru" or "ru-ru" or "russian" => Language.Russian,
+        "ar" or "ar-sa" or "arabic" => Language.Arabic,
+        "el" or "el-gr" or "greek" => Language.Greek,
         _ => Language.Unknown
     };
+
+    /// <summary>Every language the product knows how to detect and switch to.</summary>
+    public static readonly IReadOnlyList<Language> All =
+        [Language.Hebrew, Language.English, Language.Russian, Language.Arabic, Language.Greek];
 }

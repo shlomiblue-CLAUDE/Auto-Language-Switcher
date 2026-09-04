@@ -36,7 +36,7 @@ public class SerializationContextTests
             Messages = [new WireMessageStats { Counts = new() { ["Hebrew"] = 3 } }],
         });
         RoundTrips(new HealthMessage { Missing = ["mainPanel"], Tiers = new() { ["composer"] = 0 } });
-        RoundTrips(new CommandMessage { Command = "setMode", Mode = "AlwaysHebrew" });
+        RoundTrips(new CommandMessage { Command = "setMode", Mode = "Pinned", LanguageTag = "he-IL" });
         RoundTrips(new QueryMessage { Query = "state" });
     }
 
@@ -104,12 +104,13 @@ public class SerializationContextTests
         {
             var store = new ConversationStore(root, new TestClock());
             store.Load();
-            store.SetMode("conv-1", ConversationMode.AlwaysHebrew);
+            store.SetMode("conv-1", ConversationMode.Pinned, Language.Hebrew);
             store.RememberLanguage("conv-1", Language.Hebrew);
             store.SaveSettings(Settings.Default with { DefaultLanguage = Language.English });
 
             var conversations = File.ReadAllText(store.ConversationsPath);
-            Assert.Contains("AlwaysHebrew", conversations);
+            Assert.Contains("Pinned", conversations);
+            Assert.Contains("Hebrew", conversations);
             Assert.Contains("Hebrew", conversations);
 
             Assert.Contains("English", File.ReadAllText(store.SettingsPath));
@@ -129,13 +130,14 @@ public class SerializationContextTests
             var clock = new TestClock();
             var store = new ConversationStore(root, clock);
             store.Load();
-            store.SetMode("conv-1", ConversationMode.AlwaysEnglish);
+            store.SetMode("conv-1", ConversationMode.Pinned, Language.English);
             store.SaveSettings(Settings.Default with { ConfidenceThreshold = 0.85, DefaultLanguage = Language.Hebrew });
 
             var reopened = new ConversationStore(root, clock);
             reopened.Load();
 
-            Assert.Equal(ConversationMode.AlwaysEnglish, reopened.GetConversation("conv-1")!.Mode);
+            Assert.Equal(ConversationMode.Pinned, reopened.GetConversation("conv-1")!.Mode);
+            Assert.Equal(Language.English, reopened.GetConversation("conv-1")!.PinnedLanguage);
             Assert.Equal(0.85, reopened.Settings.ConfidenceThreshold);
             Assert.Equal(Language.Hebrew, reopened.Settings.DefaultLanguage);
         }

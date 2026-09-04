@@ -107,8 +107,20 @@ public sealed class ConversationStore
         });
     }
 
-    public void SetMode(string conversationKey, ConversationMode mode) =>
-        Update(conversationKey, existing => existing with { Mode = mode, UpdatedAt = _clock.Now });
+    /// <summary>
+    /// Pins a conversation to a language, or releases it back to Auto.
+    ///
+    /// The language is stored alongside the mode rather than encoded in it, which is what lets a
+    /// pin name any of the languages the product knows instead of the two the mode used to spell.
+    /// Releasing clears the language too, so a stored file never carries a pin nobody asked for.
+    /// </summary>
+    public void SetMode(string conversationKey, ConversationMode mode, Language language = Language.Unknown) =>
+        Update(conversationKey, existing => existing with
+        {
+            Mode = mode,
+            PinnedLanguage = mode == ConversationMode.Pinned ? language : Language.Unknown,
+            UpdatedAt = _clock.Now
+        });
 
     /// <summary>Starts the cooldown that stops the product arguing with a user who just overrode it.</summary>
     public void NoteManualOverride(string conversationKey, Language language)

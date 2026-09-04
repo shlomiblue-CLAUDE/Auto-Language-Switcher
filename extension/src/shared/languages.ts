@@ -9,12 +9,15 @@
  * Any change here needs the same change in agent/AutoLang.Core/ScriptTable.cs.
  */
 
-export type Language = 'Hebrew' | 'English';
+export type Language = 'Hebrew' | 'English' | 'Russian' | 'Arabic' | 'Greek';
 
 /** Wire tags, matching LanguageExtensions.ToTag in the C# side. */
 export const LANGUAGE_TAGS: Record<Language, string> = {
   Hebrew: 'he-IL',
   English: 'en-US',
+  Russian: 'ru-RU',
+  Arabic: 'ar-SA',
+  Greek: 'el-GR',
 };
 
 export interface ScriptRange {
@@ -44,6 +47,32 @@ export const SCRIPT_DEFINITIONS: readonly ScriptDefinition[] = [
     ranges: [
       { start: 0x0041, end: 0x005a }, // A-Z
       { start: 0x0061, end: 0x007a }, // a-z
+    ],
+  },
+  {
+    language: 'Russian',
+    name: 'Cyrillic',
+    ranges: [
+      { start: 0x0400, end: 0x04ff }, // Cyrillic; covers Russian in full
+    ],
+  },
+  {
+    language: 'Arabic',
+    name: 'Arabic',
+    ranges: [
+      { start: 0x0600, end: 0x06ff }, // Arabic
+      { start: 0x0750, end: 0x077f }, // Arabic Supplement
+      // Presentation forms. Deliberately starting at FB50: Hebrew's sit at FB1D-FB4F, just below.
+      { start: 0xfb50, end: 0xfdff },
+      { start: 0xfe70, end: 0xfeff },
+    ],
+  },
+  {
+    language: 'Greek',
+    name: 'Greek',
+    ranges: [
+      { start: 0x0370, end: 0x03ff }, // Greek and Coptic
+      { start: 0x1f00, end: 0x1fff }, // Greek Extended, for polytonic text
     ],
   },
 ];

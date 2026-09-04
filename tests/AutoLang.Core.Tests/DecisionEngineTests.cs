@@ -87,7 +87,7 @@ public class DecisionEngineTests
     {
         var decision = Decide(
             Request(foreground: false),
-            preference: new ConversationPreference { Mode = ConversationMode.AlwaysHebrew });
+            preference: new ConversationPreference { Mode = ConversationMode.Pinned, PinnedLanguage = Language.Hebrew });
 
         Assert.Equal(DecisionBlocker.NotForeground, decision.Blocker);
     }
@@ -229,7 +229,7 @@ public class DecisionEngineTests
     {
         var decision = Decide(
             Request(composerEmpty: false, currentLayout: Language.English),
-            preference: new ConversationPreference { Mode = ConversationMode.AlwaysHebrew });
+            preference: new ConversationPreference { Mode = ConversationMode.Pinned, PinnedLanguage = Language.Hebrew });
 
         Assert.Equal(DecisionBlocker.UserTyping, decision.Blocker);
     }
@@ -354,7 +354,8 @@ public class DecisionEngineTests
         // them has nothing to suppress.
         var preference = new ConversationPreference
         {
-            Mode = ConversationMode.AlwaysHebrew,
+            Mode = ConversationMode.Pinned,
+            PinnedLanguage = Language.Hebrew,
             ManualOverrideAt = _clock.Now,
         };
 
@@ -372,7 +373,7 @@ public class DecisionEngineTests
         // Acceptance row "override": Always Hebrew wins over English text.
         var decision = Decide(
             Request([Outgoing(Language.English, 200)], currentLayout: Language.English),
-            preference: new ConversationPreference { Mode = ConversationMode.AlwaysHebrew });
+            preference: new ConversationPreference { Mode = ConversationMode.Pinned, PinnedLanguage = Language.Hebrew });
 
         Assert.Equal(Language.Hebrew, decision.Language);
         Assert.Equal(DecisionSource.ManualPin, decision.Source);
@@ -400,7 +401,7 @@ public class DecisionEngineTests
     {
         var decision = Decide(
             Request(currentLayout: Language.English),
-            preference: new ConversationPreference { Mode = ConversationMode.AlwaysHebrew });
+            preference: new ConversationPreference { Mode = ConversationMode.Pinned, PinnedLanguage = Language.Hebrew });
 
         Assert.Equal(Language.Unknown, decision.LearnedLanguage);
     }
@@ -620,5 +621,50 @@ public class DecisionEngineTests
             Decide(request, site: new SiteState { Paused = true }).Blocker);
 
         Assert.Equal(DecisionBlocker.NotForeground, Decide(request).Blocker);
+    }
+
+    [Fact]
+    public void A_language_the_user_switched_off_is_never_applied()
+    {
+        // Somebody with five Windows layouts installed may write in two of them. Without this, a
+        // page in a language they can read but never type would drag their keyboard somewhere
+        // useless, and the evidence for it would be perfectly good.
+        var settings = Settings.Default with { EnabledLanguages = [Language.English] };
+
+        var decision = Decide(
+            Request([Outgoing(Language.Hebrew, 100)], currentLayout: Language.English),
+            settings);
+
+        Assert.Equal(DecisionOutcome.Suppressed, decision.Outcome);
+        Assert.Equal(DecisionBlocker.LanguageDisabled, decision.Blocker);
+
+        // The source and confidence are carried through, so the popup can say "read Hebrew, but
+        // Hebrew is switched off" rather than "nothing was observed" - the same reason suppressed
+        // decisions started carrying them in the first place.
+        Assert.Equal(DecisionSource.OutgoingMessages, decision.Source);
+    }
+
+    [Fact]
+    public void An_empty_list_means_every_language_rather_than_none()
+    {
+        // The default, and the one that must not read as "switch nothing off, so switch nothing".
+        Assert.Empty(Settings.Default.EnabledLanguages);
+
+        var decision = Decide(Request([Outgoing(Language.Russian, 100)], currentLayout: Language.English));
+
+        Assert.Equal(DecisionOutcome.Switch, decision.Outcome);
+        Assert.Equal(Language.Russian, decision.Language);
+    }
+
+    [Fact]
+    public void The_filter_cannot_cause_a_switch_only_prevent_one()
+    {
+        // Enabling a language is not evidence for it. If this ever inverted, a user who enabled
+        // Greek would find their keyboard in Greek on a page with nothing Greek about it.
+        var settings = Settings.Default with { EnabledLanguages = [Language.Greek, Language.English] };
+
+        var decision = Decide(Request(currentLayout: Language.English), settings);
+
+        Assert.NotEqual(DecisionOutcome.Switch, decision.Outcome);
     }
 }

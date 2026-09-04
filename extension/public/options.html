@@ -47,12 +47,22 @@
         <label for="enabled">Switch my keyboard automatically</label>
       </div>
 
+      <fieldset class="field">
+        <legend>Languages it may switch to</legend>
+        <div id="enabled-languages" class="languages"></div>
+        <p class="hint">
+          Ticked languages are the ones this may put your keyboard into. Everything installed in
+          Windows is allowed until you narrow it — useful if you can read a language you never
+          write in, because otherwise a page in it would drag your keyboard somewhere useless.
+        </p>
+      </fieldset>
+
       <div class="field">
         <label for="default-language">Default language</label>
+        <!-- Options are filled in from the layouts Windows reports, so this can never offer a
+             language the switch would fail on. -->
         <select id="default-language">
           <option value="unknown">Leave the keyboard alone</option>
-          <option value="he-IL">Hebrew</option>
-          <option value="en-US">English</option>
         </select>
         <p class="hint">
           Used only when a conversation offers no evidence at all — no messages of your own, and

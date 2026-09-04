@@ -99,7 +99,8 @@ public class ConversationKeyTests : IDisposable
         {
             Command = "setMode",
             ConversationKey = "Supplier Group",
-            Mode = "AlwaysHebrew",
+            Mode = "Pinned",
+            LanguageTag = "he-IL",
         }, Wire.Json);
 
         var reply = JsonSerializer.Deserialize<ErrorMessage>(_core.Handle(command)!, Wire.Json)!;

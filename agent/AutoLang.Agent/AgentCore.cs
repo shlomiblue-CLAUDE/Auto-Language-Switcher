@@ -225,7 +225,7 @@ public sealed class AgentCore
             ? remembered.ToString()
             : "none";
 
-        var pin = preference?.PinnedLanguage is { } pinned ? $" pin={pinned}" : "";
+        var pin = preference?.Pin is { } pinnedTo ? $" pin={pinnedTo}" : "";
         var blocker = decision.Blocker != DecisionBlocker.None ? $" blocker={decision.Blocker}" : "";
 
         // The evidence itself, because "nine messages and no decision" has two very different
@@ -309,7 +309,15 @@ public sealed class AgentCore
                         return Serialize(new ErrorMessage { Code = ErrorCodes.BadMessage, Message = "conversationKey must be a salted hash." });
                     if (!Enum.TryParse<ConversationMode>(command.Mode, ignoreCase: true, out var mode))
                         return Serialize(new ErrorMessage { Code = ErrorCodes.BadMessage, Message = $"Unknown mode '{command.Mode}'." });
-                    _store.SetMode(key, mode);
+
+                    // Pinning names a language, and the wire already had a field for one - it was
+                    // added for noteManualChange. Refused rather than silently pinned to nothing,
+                    // because a pin that pins to Unknown is a control that appears to work.
+                    var pinned = LanguageExtensions.FromTag(command.LanguageTag ?? "");
+                    if (mode == ConversationMode.Pinned && pinned == Language.Unknown)
+                        return Serialize(new ErrorMessage { Code = ErrorCodes.BadMessage, Message = "Pinning needs a language." });
+
+                    _store.SetMode(key, mode, pinned);
                     break;
 
                 case "pauseSite" when command.Site is { } site:
@@ -345,6 +353,22 @@ public sealed class AgentCore
 
                     if (command.ShowIndicator is { } showIndicator)
                         settings = settings with { ShowIndicator = showIndicator };
+
+                    if (command.EnabledLanguages is { } languages)
+                    {
+                        // Unknown tags are dropped rather than rejected. The list is a filter, so a
+                        // tag this build does not know can only ever mean "one fewer language
+                        // allowed" - never a wrong one - and refusing the whole message would leave
+                        // the user unable to change a setting because of a name they never typed.
+                        settings = settings with
+                        {
+                            EnabledLanguages = languages
+                                .Select(LanguageExtensions.FromTag)
+                                .Where(l => l != Language.Unknown)
+                                .Distinct()
+                                .ToList()
+                        };
+                    }
 
                     _store.SaveSettings(settings);
                     break;
@@ -385,12 +409,14 @@ public sealed class AgentCore
                 Enabled = _store.Settings.Enabled,
                 CurrentLayout = _layouts.CurrentLayout().ToTag(),
                 ConversationMode = (preference?.Mode ?? ConversationMode.Auto).ToString(),
+                PinnedLanguage = (preference?.Pin ?? Language.Unknown).ToTag(),
                 RememberedLanguage = (preference?.LastReliableLanguage ?? Language.Unknown).ToTag(),
                 SitePaused = site?.Paused ?? false,
                 AvailableLayouts = _layouts.AvailableLanguages().Select(l => l.ToTag()).ToList(),
                 DefaultLanguage = _store.Settings.DefaultLanguage.ToTag(),
                 ConfidenceThreshold = _store.Settings.ConfidenceThreshold,
                 ShowIndicator = _store.Settings.ShowIndicator,
+                EnabledLanguages = _store.Settings.EnabledLanguages.Select(l => l.ToTag()).ToArray(),
                 LastDecision = _lastDecision,
             });
         }

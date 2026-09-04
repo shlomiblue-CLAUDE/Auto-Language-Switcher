@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace AutoLang.Core;
@@ -24,12 +25,35 @@ public enum MessageDirection
 public sealed record MessageObservation(MessageDirection Direction, MessageStats Stats, int Index);
 
 /// <summary>Per-conversation mode. A pin beats every form of analysis (PDR section 5, priority 1).</summary>
-[JsonConverter(typeof(JsonStringEnumConverter<ConversationMode>))]
+[JsonConverter(typeof(ConversationModeConverter))]
 public enum ConversationMode
 {
     Auto,
-    AlwaysHebrew,
-    AlwaysEnglish
+    Pinned
+}
+
+/// <summary>
+/// Reads the mode, and survives a file written before there were more than two languages.
+///
+/// The mode used to name the language: Auto, AlwaysHebrew, AlwaysEnglish - one value per language,
+/// which stops working the moment there is a third. It is now Auto or Pinned, with the language
+/// stored beside it.
+///
+/// A store written by the old shape would otherwise fail to deserialise, and it would take
+/// everything with it: one unreadable enum means the whole conversations file fails to load, and
+/// what is in that file is every language the product has learned. A pin is one click to restore;
+/// the memory of fifty conversations is not. So an unrecognised value reads as Auto rather than
+/// throwing, and the pin - not the memory - is what a user loses once.
+/// </summary>
+public sealed class ConversationModeConverter : JsonConverter<ConversationMode>
+{
+    public override ConversationMode Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) =>
+        Enum.TryParse<ConversationMode>(reader.GetString(), ignoreCase: true, out var mode)
+            ? mode
+            : ConversationMode.Auto;
+
+    public override void Write(Utf8JsonWriter writer, ConversationMode value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value.ToString());
 }
 
 public sealed record ConversationPreference
@@ -51,19 +75,18 @@ public sealed record ConversationPreference
     /// <summary>When the user last overrode us here. Starts the cooldown of PDR section 12.</summary>
     public DateTimeOffset? ManualOverrideAt { get; init; }
 
-    // Derived, so ignored on the wire and on disk. They were being written to conversations.json,
-    // which is harmless but misleading: a stored file should show what is remembered, not what can
-    // be recomputed from it.
-    [JsonIgnore]
-    public ConversationMode PinnedMode => Mode;
+    /// <summary>
+    /// The language this conversation is pinned to, meaningful only when Mode is Pinned.
+    ///
+    /// Stored rather than derived from the mode, which is the change that lets a pin name any
+    /// language instead of the two the mode enum used to spell out.
+    /// </summary>
+    public Language PinnedLanguage { get; init; } = Language.Unknown;
 
+    /// <summary>The pin, or null when there is not one. Derived, so never written to disk.</summary>
     [JsonIgnore]
-    public Language? PinnedLanguage => Mode switch
-    {
-        ConversationMode.AlwaysHebrew => Language.Hebrew,
-        ConversationMode.AlwaysEnglish => Language.English,
-        _ => null
-    };
+    public Language? Pin =>
+        Mode == ConversationMode.Pinned && PinnedLanguage != Language.Unknown ? PinnedLanguage : null;
 }
 
 public sealed record SiteState
@@ -80,6 +103,19 @@ public sealed record Settings
 
     /// <summary>Applied only when there is no other evidence at all.</summary>
     public Language DefaultLanguage { get; init; } = Language.Unknown;
+
+    /// <summary>
+    /// The languages the product may switch to, chosen by the user in advance.
+    ///
+    /// Empty means "whatever Windows has installed", which is the sensible default and what a
+    /// first run gets. Naming a subset is what makes the product usable for somebody who has five
+    /// layouts installed but writes in two of them: without it, a page in a language they can read
+    /// but never write would drag their keyboard somewhere useless.
+    ///
+    /// It is a filter and never a source. Nothing here can cause a switch; it can only prevent
+    /// one, which keeps the evidence order in the engine the only thing that decides.
+    /// </summary>
+    public IReadOnlyList<Language> EnabledLanguages { get; init; } = [];
 
     public double ConfidenceThreshold { get; init; } = 0.70;
     public bool ShowIndicator { get; init; } = true;

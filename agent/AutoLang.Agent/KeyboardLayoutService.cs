@@ -32,8 +32,24 @@ public sealed record SwitchResult(bool Success, string? ErrorCode, long ElapsedM
 /// </summary>
 public sealed class KeyboardLayoutService : IKeyboardLayoutService
 {
-    private const ushort LangIdHebrew = 0x040D;
-    private const ushort LangIdEnglishUs = 0x0409;
+    /// <summary>
+    /// Primary language identifiers, which is the low ten bits of a LANGID.
+    ///
+    /// The full LANGID names a *sublanguage*: 0x0409 is US English and 0x0809 is UK English, and
+    /// there are a dozen Arabic ones. Comparing full values was a latent defect that only Hebrew
+    /// and US English were narrow enough to hide - a user with a British keyboard had their layout
+    /// reported as Unknown, so the product could not recognise what they were already using.
+    ///
+    /// The sublanguage is a regional variant of the same alphabet, which is exactly what this
+    /// product does not care about. It counts letters.
+    /// </summary>
+    private const ushort PrimaryHebrew = 0x0D;
+    private const ushort PrimaryEnglish = 0x09;
+    private const ushort PrimaryRussian = 0x19;
+    private const ushort PrimaryArabic = 0x01;
+    private const ushort PrimaryGreek = 0x08;
+
+    private static ushort PrimaryOf(IntPtr hkl) => (ushort)((long)hkl & 0x3FF);
 
     private static readonly string[] BrowserProcessNames = ["chrome", "msedge"];
 
@@ -41,15 +57,21 @@ public sealed class KeyboardLayoutService : IKeyboardLayoutService
 
     public static ushort LangIdFor(Language language) => language switch
     {
-        Language.Hebrew => LangIdHebrew,
-        Language.English => LangIdEnglishUs,
-        _ => throw new ArgumentOutOfRangeException(nameof(language), language, "v1 supports Hebrew and English.")
+        Language.Hebrew => PrimaryHebrew,
+        Language.English => PrimaryEnglish,
+        Language.Russian => PrimaryRussian,
+        Language.Arabic => PrimaryArabic,
+        Language.Greek => PrimaryGreek,
+        _ => throw new ArgumentOutOfRangeException(nameof(language), language, "Not a language this product switches to.")
     };
 
-    public static Language LanguageOf(IntPtr hkl) => ((ushort)((long)hkl & 0xFFFF)) switch
+    public static Language LanguageOf(IntPtr hkl) => PrimaryOf(hkl) switch
     {
-        LangIdHebrew => Language.Hebrew,
-        LangIdEnglishUs => Language.English,
+        PrimaryHebrew => Language.Hebrew,
+        PrimaryEnglish => Language.English,
+        PrimaryRussian => Language.Russian,
+        PrimaryArabic => Language.Arabic,
+        PrimaryGreek => Language.Greek,
         _ => Language.Unknown
     };
 
@@ -72,8 +94,8 @@ public sealed class KeyboardLayoutService : IKeyboardLayoutService
     public LayoutInfo? Resolve(Language language)
     {
         if (language == Language.Unknown) return null;
-        ushort langId = LangIdFor(language);
-        return ListInstalled().FirstOrDefault(l => l.LangId == langId);
+        ushort primary = LangIdFor(language);
+        return ListInstalled().FirstOrDefault(l => (l.LangId & 0x3FF) == primary);
     }
 
     /// <summary>Languages the user could actually be switched to, for the popup and for errors.</summary>

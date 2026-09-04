@@ -26,6 +26,16 @@
     { "id": "emoji-skin-tone", "text": "👋🏽", "counts": {} },
     { "id": "flag-then-hebrew", "text": "🇮🇱 שלום", "counts": { "Hebrew": 4 } },
 
+    { "id": "russian-word", "text": "привет", "counts": { "Russian": 6 } },
+    { "id": "russian-sentence", "text": "как дела", "counts": { "Russian": 7 } },
+    { "id": "arabic-word", "text": "مرحبا", "counts": { "Arabic": 5 } },
+    { "id": "arabic-harakat-excluded", "text": "مَرْحَبًا", "counts": { "Arabic": 5 } },
+    { "id": "arabic-presentation-form", "text": "ﻻ", "counts": { "Arabic": 1 } },
+    { "id": "greek-word", "text": "καλημέρα", "counts": { "Greek": 8 } },
+    { "id": "greek-polytonic", "text": "ἀγαθός", "counts": { "Greek": 6 } },
+    { "id": "cyrillic-and-latin-mixed", "text": "ok привет", "counts": { "English": 2, "Russian": 6 } },
+    { "id": "hebrew-presentation-form-is-not-arabic", "text": "ﭏ", "counts": { "Hebrew": 1 } },
+
     { "id": "niqqud-excluded", "text": "שָׁלוֹם", "counts": { "Hebrew": 4 } },
     { "id": "hebrew-ligature", "text": "ﭏ", "counts": { "Hebrew": 1 } },
     { "id": "accented-latin-partial", "text": "café", "counts": { "English": 3 } },
