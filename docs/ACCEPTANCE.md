@@ -275,6 +275,30 @@ Switching the layout by hand first and typing in the language it did *not* pick 
 pass immediately. Anyone re-running these needs to know that, and any bug report of the form
 "it never remembers anything" should be checked against it before it is believed.
 
+### What passing eleven rows did not prove
+
+All eleven passed, and the product was at that moment overriding the user's keyboard on Google
+Sheets — switching to English at full confidence while they typed Hebrew, four times across five
+hours. Every row above was written against a page whose text is in the DOM. A canvas application
+has none, and nothing here asked what happens then.
+
+The rows that would have caught it, and that a future round should run:
+
+| # | Do this | Expected |
+|---|---|---|
+| E12 | Open a Google Sheet, click a cell and type | No decision at all. The log stays quiet for that site |
+| E13 | Switch the layout by hand mid-typing, keep typing | It is not switched back. The next line reads `ManualChange`, then `memory=` the language chosen |
+| E14 | Move between cells, the formula bar and the name box | Focus moves between several fields; none of them may switch the layout under a field being typed in |
+| E15 | Any page: open a menu that contains text in another language | The menu's text is not counted while it is closed |
+
+E14 is the one that would have found it. Sheets has eight writing fields, focus flits between them,
+and the fault was an empty one deciding for the whole keyboard while the user typed in another.
+
+Worth stating plainly, because it is the general lesson: these rows check that the product does the
+right thing where it can read the page. They do not check what it does where it cannot, and "cannot
+read" is not rare — it is every canvas application, every custom editor, every remote desktop in a
+tab.
+
 **CPU and memory — the row left open since manual C.** 105 samples at 5s intervals across 8.8
 minutes of active use, read from a process outside the sandbox:
 
@@ -303,7 +327,8 @@ Fill in when run. An empty row is more useful than an assumed one.
 | Manual B — network | 2026-09-03 | PASS | Zero requests in the service worker Network panel across several conversation switches. On disk: 3 files, no message text, the one stored key is 32 hex characters |
 | Manual C — 30 switches | 2026-09-03 | FAIL, then PASS | Found two real defects. After both: no flip-flop across a session, switches 11–19ms, three evidence sources, zero failed switches. CPU and memory not observed |
 | Manual D — Edge foreground | 2026-09-03 | PASS | 7/8, 15–25ms; real switch applied by the shipped binary |
-| Manual E — an ordinary site | 2026-09-04 | PASS, 11/11 | Every row read back from the agent log. CPU 31ms across 8.8 minutes of use, 0.006% over 12.9 hours; memory stable at 15.1MB private. Rows 3 and 4 needed a second attempt — see the note under them |
+| Manual E — an ordinary site | 2026-09-04 | PASS, 11/11 | Every row read back from the agent log. CPU 31ms across 8.8 minutes of use, 0.006% over 12.9 hours; memory stable at 15.1MB private. Rows 3 and 4 needed a second attempt. **All eleven passed while the product was overriding the keyboard on Google Sheets** — see what passing did not prove |
+| Manual E12–E15 — a canvas application | | | Written after the fact, from the defect the eleven rows missed. Not run |
 
 ---
 

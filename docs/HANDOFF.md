@@ -36,8 +36,10 @@ The `.pem` is needed to sign a `.crx` for distribution outside the store, and to
 somewhere; not the single point of failure this paragraph used to claim it was.
 
 **Status: working end to end on the user's machine**, on WhatsApp Web and on ordinary sites. Five
-manual acceptance runs pass, including all eleven rows for generic sites. One row has never been
-run: that alt-tabbing away leaves the other window's layout alone. See [Open](#open).
+manual acceptance runs pass, including all eleven rows for generic sites — and the product was
+still badly broken on Google Sheets when they did, which is worth more than the eleven ticks. One
+row has never been run: that alt-tabbing away leaves the other window's layout alone.
+See [Open](#open).
 
 ---
 
@@ -131,8 +133,13 @@ unavailable. It never needed them. The mapping is exact and `DecisionEngine.cs` 
 | Manual pin | per chat | per writing box |
 | Conversation memory | what you typed there | **the same, and it is the main path** |
 | Outgoing messages | your sent messages | *(unused)* |
-| Weak fallback (incoming) | the other person's words | **the language of the surrounding text** |
+| Weak fallback (incoming) | the other person's words | **the language of the surrounding text**, and only when there is enough of it to mean anything |
 | Global default | — | the same |
+
+Two rules decide what "the surrounding text" is, and both were paid for on Google Sheets: only
+text the user can actually see is counted, and below sixty visible letters the adapter reports no
+evidence rather than thin evidence. A ratio over a handful of letters is returned as certainty,
+which is how an interface came to outvote a document.
 
 The page's language enters as *incoming* because that is what it is: words the user did not write.
 The engine already holds incoming evidence to a higher bar and already refuses to commit it to
@@ -162,8 +169,9 @@ $env:DOTNET_ROOT = "$env:LOCALAPPDATA\Microsoft\dotnet"
 
 There is no `agent.sln`; test the two projects individually.
 
-**320 tests: 126 Core, 85 Agent, 109 TypeScript.** The build fails on any of them, on a privacy
-audit failure, or on a store preflight failure. (The commit that added them says 319; it is 320.)
+**327 tests: 128 Core, 86 Agent, 113 TypeScript.** The build fails on any of them, on a privacy
+audit failure, or on a store preflight failure. Two commit messages give the count as one short;
+the number here is the one that was counted.
 
 Verbose logging is off by default and is the only way to see decisions:
 
@@ -246,10 +254,48 @@ removes `chrome.runtime` outright rather than throwing a named error — so the 
 failing, and open tabs are revived once per extension load. This is not a development annoyance:
 every published update does it to every user with a tab open.
 
+### Where there is nothing to read
+
+Google Sheets took four rounds, and it is worth reading as one story rather than four fixes. Its
+grid is drawn on a **canvas**, so the DOM holds no cell text at all. The product read the only text
+there was — Google's interface — and switched to English at full confidence, over and over, while
+the user typed Hebrew. Four times across five hours in one log.
+
+**A manual change had never been noticed.** PDR section 18 asks the product to back off when the
+user moves the layout themselves, the store listing promises it, and `NoteManualChange` had always
+implemented it — but nothing called it. It was only ever inferred from the typing guard, which
+needs a composer it can read. The engine now compares the layout against the one it saw last *in
+the same conversation*; a value it did not set is the user, and that is learned as well as obeyed.
+Two wrong versions came first and both are worth knowing: comparing against the last *imposed*
+layout misses the case where the layout was already correct and nothing was imposed, and a detector
+not scoped to one conversation blames whichever conversation arrives next and puts it in a cooldown
+it never earned.
+
+**The application's shell outvoted its content**, which is what sampling a whole document does in
+an application. Reading climbs to the container around the box and counts prose only, skipping
+controls, labels and landmarks.
+
+**Then measuring the live page ended the guessing, and should have come first.** Every one of the
+333 characters the sampler collected on a blank spreadsheet was *invisible*: a hidden error banner,
+screen-reader hints, and the closed account panel — which is where the user's own name and email
+were being counted from. Text is now counted only if it is visible. That is the correct rule and a
+smaller footprint at once: what somebody is about to write is informed by what is in front of them.
+
+**Twenty-nine letters were still enough**, because confidence is a ratio. The climb to a context
+had a floor and the fallback to the body had none, so it took whatever was there. Below sixty
+visible letters the adapter now reports no evidence at all rather than thin evidence, and the
+engine's default leaves the keyboard alone.
+
+The general lesson is in the order those arrived: four rounds of inference from a log, then one
+measurement that corrected two of them. Two comments in the code had by then cited a live log for
+things that were never observed — the fragment format, and why the cell editor had no name. Both
+were wrong. If a page is behaving strangely, open it and measure it before writing down why.
+
 **A caution about my own conclusions:** I have repeatedly over-concluded from one data point and
-been corrected by the log — including twice in one session, once declaring the whole chain dead
-when the user's tabs simply held orphaned scripts. Check which process's view you are reading, and
-check the log before believing a hypothesis.
+been corrected by the log — declaring the whole chain dead when the user's tabs simply held
+orphaned scripts, and twice writing an invented observation into a comment. Check which process's
+view you are reading, check the log before believing a hypothesis, and do not describe evidence you
+have not looked at.
 
 ---
 
@@ -279,7 +325,9 @@ looks perfectly healthy — `store-preflight.mjs` recomputes the ID from the key
 ## Open
 
 **Manual E passed in full on 2026-09-04**, all eleven rows read back from the agent log rather
-than from what the screen appeared to do. Two are worth knowing about:
+than from what the screen appeared to do — and the product was overriding the keyboard on Google
+Sheets the whole time. Four rows that would have caught it are written in `ACCEPTANCE.md` and have
+not been run. Three things worth knowing:
 
 - Row 4 is the strongest evidence the design works: two boxes on one Gmail page, two seconds apart,
   one switching to Hebrew from memory and the other to English from its own context.
@@ -287,6 +335,8 @@ than from what the screen appeared to do. Two are worth knowing about:
   in the language the engine already chose teaches it nothing — the anti-echo rule correctly refuses
   to learn its own guess, so everything read `memory=none` and it looked broken. Switch the layout
   by hand first. Treat any "it never remembers" report as this until proven otherwise.
+- Every row assumes a page whose text is in the DOM. A canvas application has none, and no row
+  asked what happens then. That is the gap the Sheets round came through.
 
 **CPU and memory: settled, and cheap.** 31ms of CPU across 8.8 minutes of active use; 2.594s total
 across 12.9 hours of uptime, or 0.006%. Memory stable at 15.1MB private (46MB working set, which
