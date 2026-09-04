@@ -18,7 +18,13 @@ Memory is per writing box, so a Hebrew message and an English search on the same
 Entirely local: no API, no server, no telemetry, no remote code. That is the product's central
 claim and a release-gating audit enforces it (`tools/privacy-audit.mjs`, wired into the build).
 
-**Repository:** `D:\claude workspace\H-E`, branch `master` — the only branch.
+**Repository:** `D:\claude workspace\H-E`, branch `main` — the only branch. Backed up to a private
+GitHub repo, `shlomiblue-CLAUDE/Auto-Language-Switcher`.
+
+**`secrets/extension-key.pem` is not in it, and must never be.** It is gitignored, and it is also
+the one irreplaceable file here: the extension ID is derived from it and the native host allowlist
+names that ID exactly. Lose it and every existing install breaks while the extension looks
+perfectly healthy. It needs a backup that is not this repository.
 
 **Status: working end to end on the user's machine**, on WhatsApp Web and on ordinary sites. Four
 manual acceptance rows pass; the rows for generic sites are written and unmarked. See [Open](#open).
