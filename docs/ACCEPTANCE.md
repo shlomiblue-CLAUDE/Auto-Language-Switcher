@@ -284,15 +284,38 @@ has none, and nothing here asked what happens then.
 
 The rows that would have caught it, and that a future round should run:
 
-| # | Do this | Expected |
-|---|---|---|
-| E12 | Open a Google Sheet, click a cell and type | No decision at all. The log stays quiet for that site |
-| E13 | Switch the layout by hand mid-typing, keep typing | It is not switched back. The next line reads `ManualChange`, then `memory=` the language chosen |
-| E14 | Move between cells, the formula bar and the name box | Focus moves between several fields; none of them may switch the layout under a field being typed in |
-| E15 | Any page: open a menu that contains text in another language | The menu's text is not counted while it is closed |
+| # | Do this | Expected | Run of 2026-09-04 |
+|---|---|---|---|
+| E12 | Open a Google Sheet, click a cell and type | No decision at all. The log stays quiet for that site | **PASS** — every empty-composer read returns `NoSignal` on evidence of `he=0 en=0`. The adapter reports nothing at all |
+| E13 | Switch the layout by hand mid-typing, keep typing | It is not switched back. The next line reads `ManualChange`, then `memory=` the language chosen | **FAIL** — see below |
+| E14 | Move between cells, the formula bar and the name box | Focus moves between several fields; none of them may switch the layout under a field being typed in | **PASS** — eight keys interleave exactly as they did when this was broken, and the layout holds Hebrew across all of them |
+| E15 | Any page: open a menu that contains text in another language | The menu's text is not counted while it is closed | **PASS** — measured on the live page: 13 characters counted with the Insert menu closed, and the same 13 with it open |
 
-E14 is the one that would have found it. Sheets has eight writing fields, focus flits between them,
-and the fault was an empty one deciding for the whole keyboard while the user typed in another.
+**58 decisions, zero switches applied.** That is the result these four rows exist for.
+
+E14 is the one that would have found the original fault. Sheets has eight writing fields, focus
+flits between them, and an empty one was deciding for the whole keyboard while the user typed in
+another.
+
+E15 passed twice over, by two independent guards: a closed menu is invisible, and an open one is
+`role="menu"` and therefore application furniture.
+
+### E13 fails, and it is recorded rather than fixed
+
+The log shows the manual change happening — `layout=English` at 20:02:29 becomes `layout=Hebrew` at
+20:02:32 — with no `ManualChange` line and `memory=none` throughout. It was not learned.
+
+The reason is structural. Detection compares two consecutive observations *of the same
+conversation*, and on Sheets focus moves between fields between one observation and the next. That
+condition is not incidental: without it a stability test showed the change being attributed to
+whichever conversation arrived next, putting it into a five minute cooldown it never earned. The
+row is left failing rather than the guard loosened to make it green.
+
+The consequence here is benign, and only here. Sheets produces no evidence at all, so nothing
+competes with the user's choice and it survives by default rather than by memory. On a page that
+does produce evidence the field is stable and detection fires — which is where it is needed. Worth
+re-running E13 on Gmail, where it should pass, to confirm the failure is about Sheets and not about
+the mechanism.
 
 Worth stating plainly, because it is the general lesson: these rows check that the product does the
 right thing where it can read the page. They do not check what it does where it cannot, and "cannot
@@ -328,7 +351,7 @@ Fill in when run. An empty row is more useful than an assumed one.
 | Manual C — 30 switches | 2026-09-03 | FAIL, then PASS | Found two real defects. After both: no flip-flop across a session, switches 11–19ms, three evidence sources, zero failed switches. CPU and memory not observed |
 | Manual D — Edge foreground | 2026-09-03 | PASS | 7/8, 15–25ms; real switch applied by the shipped binary |
 | Manual E — an ordinary site | 2026-09-04 | PASS, 11/11 | Every row read back from the agent log. CPU 31ms across 8.8 minutes of use, 0.006% over 12.9 hours; memory stable at 15.1MB private. Rows 3 and 4 needed a second attempt. **All eleven passed while the product was overriding the keyboard on Google Sheets** — see what passing did not prove |
-| Manual E12–E15 — a canvas application | | | Written after the fact, from the defect the eleven rows missed. Not run |
+| Manual E12–E15 — a canvas application | 2026-09-04 | 3/4 PASS | 58 decisions, zero switches applied. E13 fails on Sheets for a structural reason, recorded rather than fixed |
 
 ---
 

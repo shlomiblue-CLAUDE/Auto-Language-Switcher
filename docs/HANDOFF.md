@@ -335,8 +335,13 @@ not been run. Three things worth knowing:
   in the language the engine already chose teaches it nothing — the anti-echo rule correctly refuses
   to learn its own guess, so everything read `memory=none` and it looked broken. Switch the layout
   by hand first. Treat any "it never remembers" report as this until proven otherwise.
-- Every row assumes a page whose text is in the DOM. A canvas application has none, and no row
-  asked what happens then. That is the gap the Sheets round came through.
+- Every row assumed a page whose text is in the DOM. A canvas application has none, and no row
+  asked what happens then. That is the gap the Sheets round came through. Four rows now cover it:
+  **E12, E14 and E15 pass; E13 fails and is left failing.** A manual change is not learned on
+  Sheets, because detection needs two consecutive observations of the same conversation and focus
+  moves between fields there. The guard is not loosened to make the row green — a stability test
+  proved what loosening costs. On Sheets it does not matter, since nothing competes with the user's
+  choice; on a page with stable fields it fires, which is where it is needed.
 
 **CPU and memory: settled, and cheap.** 31ms of CPU across 8.8 minutes of active use; 2.594s total
 across 12.9 hours of uptime, or 0.006%. Memory stable at 15.1MB private (46MB working set, which
