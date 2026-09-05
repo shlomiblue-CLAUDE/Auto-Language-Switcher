@@ -384,7 +384,7 @@ Run them with the Agent started with `--verbose`, and read the log rather than t
 | F17 | Settings → Applications → add one, then go to it and set a layout by hand | It is learned, and the next line reads it from `ConversationMemory` | **PASS** |
 | F18 | Leave for another application and come back | The layout returns on its own, and what was learned is unchanged | **PASS** — `Switch lang=Hebrew src=ConversationMemory` against `layout=English`, twice |
 | F19 | Two windows of one application with different titles, a different language in each | Two keys, each remembering its own | **run on Notepad, 2026-09-05. PASS on its own question, and it found a defect** — two windows did get separate identities, but each got *two*: four keys in twenty-five seconds. See below |
-| F23 | Type in a saved document, so the title gains its unsaved marker | The conversation key does not change | **run after the fix** |
+| F23 | Type in a saved document, so the title gains its unsaved marker | The conversation key does not change | **PASS, 2026-09-05** — the live window title read `*טסט1.txt - פנקס רשימות`, which hashes raw to `0e3956bb`, while the log recorded `59fe65c2` for that same window. Two keys across the whole session where there had been four |
 | F24 | Let a message arrive in an application that counts unread items in its title | The conversation key does not change | **covered by test, not yet run live** — WhatsApp desktop is one context regardless |
 | F20 | Application → browser → application, several times | Never two sources on one layout | **PASS** — zero watcher decisions on a browser process, across the whole log |
 | F21 | Sit in an allowed application without touching anything for a minute | One line, not sixty | **PASS** — 58 seconds, no lines |
@@ -418,6 +418,15 @@ four exactly:
 One key per file saved, another per file dirty. The marker appears on the first keystroke, so the
 product forgot what it had learned about a document at the exact moment somebody started writing in
 it. `DesktopIdentity.NormaliseTitle` now removes it, and F23 exists to check that it stays removed.
+
+**What F19 still has not shown.** Both Notepad windows held Hebrew in both runs, so the row's
+*"a different language in each"* half is unproven - what is proven is that the two windows keep
+separate identities and separate memories. Worth finishing on an English window.
+
+**Old desktop keys are orphaned, not migrated.** Two entries hashed from the un-normalised dirty
+titles are still in `conversations.json` and will never be looked up again. They are harmless -
+salted hashes of nothing readable - and the store is small enough that pruning them would be a
+feature nobody asked for. Anything learned before the fix is relearned on first use.
 
 This is also the answer to a question left open a round earlier, when the same marker was written
 down as a guess. It was worth measuring rather than assuming in either direction — the guess was
@@ -459,6 +468,7 @@ Fill in when run. An empty row is more useful than an assumed one.
 | Privacy audit | 2026-09-05 | PASS, 17/17 | Found a real defect in itself: the allowlist check rejected any name containing a dot, and `WhatsApp.Root` and `OneDrive.Sync.Service` are ordinary process names |
 | Log reviewer | 2026-09-05 | FAIL, then PASS | `review-log.ps1` had been reading 447 of 2567 decision lines and reporting "Nothing suspicious" over the rest. Its pattern predates the ` on <site>` segment added to the log on 2026-09-03 23:30. Any "clean" reading taken from this tool after that moment covered only the decisions made outside the browser |
 | Manual F19 — two windows of one application | 2026-09-05 | PASS, and found a defect | Run on Notepad, the application that made the row runnable at all. Two windows produced four keys: the unsaved marker in the title was minting a second identity per document, the moment typing began. Normalisation added, ten tests, every rule mutation-checked |
+| F23 — typing does not change the key | 2026-09-05 | PASS | The fix confirmed against the live window rather than against the test that asserts it: the title carried the marker, the raw hash of it did not appear in the log, the normalised one did |
 
 ---
 
