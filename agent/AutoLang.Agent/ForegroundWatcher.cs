@@ -61,6 +61,16 @@ public sealed class ForegroundWatcher : IDisposable
     /// </summary>
     private (string Process, string Title, Language Layout) _last = ("", "", Language.Unknown);
 
+    /// <summary>
+    /// The title as the conversation key will see it.
+    ///
+    /// This filter has to agree with <see cref="DesktopIdentity.ForWindow"/> or it defeats it.
+    /// Comparing raw titles here means Notepad's asterisk appearing the moment somebody types looks
+    /// like arrival at a new window: a report fires, and one is fired for every keystroke that
+    /// toggles the marker. The key would be right and the noise would be back.
+    /// </summary>
+    private static string Title(ForegroundWindow window) => DesktopIdentity.NormaliseTitle(window.Title);
+
     public ForegroundWatcher(
         IKeyboardLayoutService layouts,
         Func<string, bool> isAllowed,
@@ -124,12 +134,12 @@ public sealed class ForegroundWatcher : IDisposable
             if (!window.Exists) return;
             if (KeyboardLayoutService.IsBrowserProcess(window.ProcessName)) return;
             if (!_isAllowed(window.ProcessName)) return;
-            if (window.ProcessName != _last.Process || window.Title != _last.Title) return;
+            if (window.ProcessName != _last.Process || Title(window) != _last.Title) return;
 
             var layout = _layouts.CurrentLayout();
             if (layout == _last.Layout) return;
 
-            _last = (window.ProcessName, window.Title, layout);
+            _last = (window.ProcessName, Title(window), layout);
             _onWindow(window.ProcessName, window.Title);
         }
         catch (Exception ex)
@@ -161,9 +171,9 @@ public sealed class ForegroundWatcher : IDisposable
             if (!_isAllowed(window.ProcessName)) return;
 
             var layout = _layouts.CurrentLayout();
-            if (window.ProcessName == _last.Process && window.Title == _last.Title && layout == _last.Layout) return;
+            if (window.ProcessName == _last.Process && Title(window) == _last.Title && layout == _last.Layout) return;
 
-            _last = (window.ProcessName, window.Title, layout);
+            _last = (window.ProcessName, Title(window), layout);
             _onWindow(window.ProcessName, window.Title);
         }
         catch (Exception ex)

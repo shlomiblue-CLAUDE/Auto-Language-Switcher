@@ -248,7 +248,7 @@ $env:DOTNET_ROOT = "$env:LOCALAPPDATA\Microsoft\dotnet"
 
 There is no `agent.sln`; test the two projects individually.
 
-**361 tests: 142 Core, 97 Agent, 122 TypeScript.** The build fails on any of them, on a privacy
+**371 tests: 152 Core, 97 Agent, 122 TypeScript.** The build fails on any of them, on a privacy
 audit failure, or on a store preflight failure.
 
 Count them rather than adding them up from a previous message. Three commits state a total that is
@@ -490,10 +490,25 @@ across 12.9 hours of uptime, or 0.006%. Memory stable at 15.1MB private (46MB wo
 counts shared runtime pages). The generic adapter attaches no MutationObserver and reacts only to
 focus and typing, and the numbers say that was the right call.
 
-**Manual F: six of seven pass.** F19 - two windows of one application remembering separately -
-could not be run, because the application used never changes its window title. It needs one that
-does. Everything else passed with evidence, including that no window title reaches disk and that
-the watcher never decides anything about a browser process.
+**Manual F: all seven pass now.** F19 - two windows of one application remembering separately -
+was finally run on Notepad, which is the application that made it runnable: its title carries the
+file name. It passed on its own question and failed on one nobody had asked. Two windows produced
+**four** conversation keys in twenty-five seconds, and recomputing the hashes from the live titles
+matched all four: one per file saved, one per file dirty. Notepad prepends `*` the moment there are
+unsaved changes, so the product forgot a document at the instant somebody began writing in it.
+
+`DesktopIdentity.NormaliseTitle` removes that marker, a leading unread counter, and invisible
+direction marks - and deliberately keeps the trailing application name, because removing that would
+merge every document in an editor into one memory. Ten tests, each rule mutation-checked.
+`ForegroundWatcher` normalises in its duplicate filter too, or the key would be right while the
+noise came back as a report per keystroke.
+
+**Existing desktop memories were keyed on un-normalised titles and no longer match.** They are
+relearned on first use, which costs one manual layout change per window and nothing else.
+
+The lesson is the one this project keeps relearning: the unsaved marker had been written down a
+round earlier as a *guess*. Measuring it proved the guess right about Notepad and wrong about Word,
+which writes no marker at all.
 
 **Alt-tab isolation: settled.** It never needed staging — it happened 23 times on its own during a
 day's use, every one `Suppressed blocker=NotForeground`, none followed by a switch, against 212

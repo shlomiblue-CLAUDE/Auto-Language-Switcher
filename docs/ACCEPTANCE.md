@@ -11,7 +11,7 @@ Run the automated part with:
 ```
 
 ```bash
-dotnet test                       # 239 C# tests, including the twelve rows below
+dotnet test                       # 249 C# tests, including the twelve rows below
 node tools/privacy-audit.mjs      # the privacy gate
 node tools/bridge-smoke-test.mjs  # five checks across three processes
 ```
@@ -383,7 +383,9 @@ Run them with the Agent started with `--verbose`, and read the log rather than t
 | F16 | **Before allowing anything**, switch between applications and change the layout by hand | Silence. Not a decision, not a key, not a line | **PASS** — a silent gap in the log while a foreground sampler recorded moves between Claude, WhatsApp, Chrome and Explorer |
 | F17 | Settings → Applications → add one, then go to it and set a layout by hand | It is learned, and the next line reads it from `ConversationMemory` | **PASS** |
 | F18 | Leave for another application and come back | The layout returns on its own, and what was learned is unchanged | **PASS** — `Switch lang=Hebrew src=ConversationMemory` against `layout=English`, twice |
-| F19 | Two windows of one application with different titles, a different language in each | Two keys, each remembering its own | **not runnable on the application used** — see below |
+| F19 | Two windows of one application with different titles, a different language in each | Two keys, each remembering its own | **run on Notepad, 2026-09-05. PASS on its own question, and it found a defect** — two windows did get separate identities, but each got *two*: four keys in twenty-five seconds. See below |
+| F23 | Type in a saved document, so the title gains its unsaved marker | The conversation key does not change | **run after the fix** |
+| F24 | Let a message arrive in an application that counts unread items in its title | The conversation key does not change | **covered by test, not yet run live** — WhatsApp desktop is one context regardless |
 | F20 | Application → browser → application, several times | Never two sources on one layout | **PASS** — zero watcher decisions on a browser process, across the whole log |
 | F21 | Sit in an allowed application without touching anything for a minute | One line, not sixty | **PASS** — 58 seconds, no lines |
 | F22 | Open `apps.json` and `conversations.json` | Process names in the first, 32-hex keys in the second, no window title anywhere | **PASS** — every conversation key is 32 hex, and the only readable name on disk is the process the user chose |
@@ -400,6 +402,26 @@ an unread count, which would mint a new context per message rather than per chat
 Choose an application whose title moves, and record which one was used. For WhatsApp the answer is
 not a better application to test with: it is that WhatsApp Web, in the browser, does this properly
 and the desktop app cannot.
+
+**Notepad is the application that made F19 runnable**, and running it found the defect the row was
+never looking for. Two files, two windows, twenty-five seconds — and four conversation keys. The
+titles were sampled from the live window and the hashes recomputed from them, which matched all
+four exactly:
+
+| Title | Key |
+|---|---|
+| `טסט1.txt - פנקס רשימות` | `59fe65c2` |
+| `*טסט1.txt - פנקס רשימות` | `0e3956bb` |
+| `טסט2.txt - פנקס רשימות` | `177d69d8` |
+| `*טסט2.txt - פנקס רשימות` | `025721fe` |
+
+One key per file saved, another per file dirty. The marker appears on the first keystroke, so the
+product forgot what it had learned about a document at the exact moment somebody started writing in
+it. `DesktopIdentity.NormaliseTitle` now removes it, and F23 exists to check that it stays removed.
+
+This is also the answer to a question left open a round earlier, when the same marker was written
+down as a guess. It was worth measuring rather than assuming in either direction — the guess was
+right about Notepad and would have been wrong about Word, which writes no marker at all.
 
 ### What this run found
 
@@ -423,7 +445,7 @@ Fill in when run. An empty row is more useful than an assumed one.
 
 | Check | Date | Result | Notes |
 |---|---|---|---|
-| Automated suite (361 tests) | 2026-09-05 | PASS | 142 Core, 97 Agent, 122 TypeScript. Counted from the build output, not carried forward from a previous number |
+| Automated suite (371 tests) | 2026-09-05 | PASS | 152 Core, 97 Agent, 122 TypeScript. Counted from the build output, not carried forward from a previous number |
 | Privacy audit | 2026-09-03 | PASS, 1 skipped | Store empty; stored-data check did not run |
 | Bridge smoke test (5) | 2026-09-03 | PASS | Against the installed build |
 | Manual A — selectors | 2026-09-03 | FAIL, then PASS | Direction was dead; adapter v2.0.0 resolves 19/19 live, 0 disagreements |
@@ -436,6 +458,7 @@ Fill in when run. An empty row is more useful than an assumed one.
 | Real-use round, day 1 | 2026-09-05 | FAIL — blocked | Windows Defender quarantined `AutoLang.exe` as `Behavior:Win32/Persistence.A!ml` within a minute of installing, taking the executable, the `Run` value and the `Uninstall` key with it. It then quarantined the build output mid-`publish`. Autostart moved to a Startup-folder shortcut; the machine needs a hand-made allow in Windows Security before anything can run again |
 | Privacy audit | 2026-09-05 | PASS, 17/17 | Found a real defect in itself: the allowlist check rejected any name containing a dot, and `WhatsApp.Root` and `OneDrive.Sync.Service` are ordinary process names |
 | Log reviewer | 2026-09-05 | FAIL, then PASS | `review-log.ps1` had been reading 447 of 2567 decision lines and reporting "Nothing suspicious" over the rest. Its pattern predates the ` on <site>` segment added to the log on 2026-09-03 23:30. Any "clean" reading taken from this tool after that moment covered only the decisions made outside the browser |
+| Manual F19 — two windows of one application | 2026-09-05 | PASS, and found a defect | Run on Notepad, the application that made the row runnable at all. Two windows produced four keys: the unsaved marker in the title was minting a second identity per document, the moment typing began. Normalisation added, ten tests, every rule mutation-checked |
 
 ---
 
