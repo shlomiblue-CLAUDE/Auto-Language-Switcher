@@ -452,6 +452,7 @@ have not looked at.
 | `extension/src/content/` | Observer: adapter chain, debounce, focus, typing filter, orphan handling |
 | `tools/verify-registration.ps1` | Is the registration visible to other processes? |
 | `tools/review-log.ps1` | Flip-flop and memory-churn detector. Warns loudly when it cannot parse the log, which it once did silently |
+| `tools/make-portable.ps1` | Builds the folder and zip another machine needs. Refuses if the Agent is missing, which Defender has caused twice |
 | `tools/privacy-audit.mjs` | Release gate. Proven to catch a planted phone number |
 | `tools/store-preflight.mjs` | Derives the extension ID from the manifest key |
 | `docs/ACCEPTANCE.md` | The rows, what passed, and what each round of manual testing found |
@@ -460,6 +461,30 @@ have not looked at.
 **Extension ID `iblcjhakhfggopgijnankilmifbjbdbp`**, fixed by the `key` field in the manifest. The
 native host allowlist names it exactly. Remove `key` and every install fails while the extension
 looks perfectly healthy — `store-preflight.mjs` recomputes the ID from the key to catch that.
+
+---
+
+## Giving it to another machine
+
+```powershell
+.uild.ps1
+.	ools\make-portable.ps1     # dist\AutoLang-portable.zip, 8.8MB
+```
+
+The recipient runs `installer\Install.ps1 -Verify` **from a PowerShell they opened themselves** —
+the same rule as here, for the same reason — then loads the `extension` folder unpacked. All of it
+is in `installer/read-me.he.txt`, which the package carries as `קרא-אותי.txt`.
+
+**Tell them about Defender before they open it, not after.** They are being asked to click "Allow
+on device" on something Windows has called severe, and the honest framing is the one in the
+read-me: it is a behaviour warning about an unsigned program that installs itself to start at
+sign-in, it is not a virus that was found, and they should not allow it if they do not trust the
+person who gave it to them.
+
+A second browser on a machine that already has the Agent needs nothing installed — the install
+registers fourteen Chromium variants — only the unpacked extension. **The extension ID must read
+`iblcjhakhfggopgijnankilmifbjbdbp`**, which it will, because the `key` field fixes it. Firefox is
+not supported and will not be.
 
 ---
 
