@@ -254,6 +254,48 @@ actually be obtained is the right one.
 
 Certificates have been capped at one year since 15 February 2026, so this is a recurring cost.
 
+### Getting one through Azure Artifact Signing
+
+The chosen path, because the publisher is an Israeli עוסק מורשה of more than three years: Israel is
+on the organisation list, organisation validation requires three or more years of verifiable tax
+history, and the alternative costs roughly twice as much and arrives with a hardware token to keep
+safe.
+
+**Two things block the form before the portal is even opened.** Organisation validation demands a
+**website belonging to the legal entity** and a **primary email on a domain that entity owns**,
+with the secondary email on the same domain. A Gmail address fails. That means buying a domain —
+which the launch needs anyway, because `web/privacy.html` must be hosted publicly for Chrome Web
+Store approval. One domain closes both, so it is the first thing to buy.
+
+Then, in order:
+
+1. A **paid** Azure subscription. Free, trial and sponsored subscriptions are refused outright.
+2. Register the resource provider: `az provider register --namespace "Microsoft.CodeSigning"`.
+3. Create an Artifact Signing account, Basic SKU. **Israel Central is not a supported region for
+   the service** — use West Europe. The geography that matters is the entity's, not the resource's.
+4. Assign yourself the **Artifact Signing Identity Verifier** role, or "New identity" stays greyed
+   out with no explanation.
+5. Identity validations → Organization → Public. The **Organization Name is the validated legal
+   name and appears in the certificate**; for a sole proprietor that is usually the person's own
+   name, and neither CN nor O can be customised. The business identifier is the עוסק מורשה number.
+   First and last name must match the government ID exactly.
+6. Identity verification as the organisation's representative, through AU10TIX and Verified ID in
+   Microsoft Authenticator.
+7. **Wait 1–20 business days.** It cannot be expedited, and duplicate requests for one entity make
+   it worse. Two hard limits: the email verification link **expires after seven days** and a missed
+   one means starting over, and requests for further documents allow **three attempts only**.
+8. Create a Public Trust certificate profile.
+
+**Signing setup, where the time actually goes:** Windows SDK 10.0.2261.755 or later — older ones
+silently do not work — and the **64-bit** `signtool.exe` with the **64-bit**
+`Azure.CodeSigning.Dlib.dll`. Mixing architectures crashes with nothing in the console and an entry
+only in Event Viewer. The `Artifact Signing Certificate Profile Signer` role goes on the **App
+Registration**, not the main account; getting that wrong is the usual cause of a 403.
+
+**Two things expire quietly.** Identity validation, with reminders from 60 days out — miss it and
+certificate renewal stops and all signing halts. And the App Registration's client secret, which
+fails the build instead. Put both in a calendar.
+
 Once a certificate exists, `installer/AutoLang.iss` signs during the build:
 
 ```
@@ -264,10 +306,14 @@ iscc /S"signtool=signtool.exe sign /fd sha256 /tr http://timestamp.digicert.com 
 
 ## Order of operations
 
-1. Order the certificate — everything else can proceed in parallel, and this cannot be hurried
-2. Publish the landing page and privacy policy
-3. Verify selectors against live WhatsApp
-4. Take screenshots from a test account
-5. Register the developer account ($5, one-off) and complete identity verification
-6. Submit to Chrome, then Edge
-7. Sign the installer as soon as the certificate arrives
+1. **Buy the domain.** It comes first now, not because it is urgent in itself but because two
+   later steps are blocked on it: Artifact Signing will not validate an organisation without a
+   website and an email on the entity's own domain, and the store will not approve without a
+   publicly hosted privacy policy.
+2. Start the certificate — everything else can proceed in parallel, and this cannot be hurried
+3. Publish the landing page and privacy policy
+4. Verify selectors against live WhatsApp
+5. Take screenshots from a test account
+6. Register the developer account ($5, one-off) and complete identity verification
+7. Submit to Chrome, then Edge
+8. Sign the installer as soon as the certificate arrives
