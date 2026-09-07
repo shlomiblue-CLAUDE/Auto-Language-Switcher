@@ -202,6 +202,62 @@ foreach ($group in $switches | Group-Object Key) {
     }
 }
 
+# Flip-flop between two conversations in one place, which the per-key loop above cannot see.
+#
+# Two windows of one application, or two boxes on one page, each remembering a different language,
+# can take turns undoing each other's layout while the user sits still. Every individual key looks
+# perfectly consistent - it switches to the language it remembers, every time - so grouping by key
+# reports nothing at all. It was found by reading a five-minute stretch of log by hand, which is
+# not a repeatable way to find anything.
+#
+# What counts is the same PAIR going back and forth - A, B, A - and not a single A to B.
+#
+# The first version of this check flagged every adjacent pair of switches in one place, and its
+# own output killed it: it reported thirty-seven findings on WhatsApp Web, every one of them the
+# user moving from an English chat to a Hebrew one two seconds later. That is not a defect, it is
+# the product. Three different keys in a row is somebody scrolling through their conversations.
+#
+# A fight looks different: one pair of keys, reversing each other repeatedly.
+#
+# It is counted per pair over ten minutes rather than between adjacent switches, because the second
+# attempt at this check missed the very case it was written for. The two Claude windows reversed
+# each other four times in eight minutes, but roughly ninety seconds apart, so anything that
+# required the alternations to be adjacent in time discarded them. Rate is the signal, not
+# proximity: chat-hopping produces many pairs once each, and a fight produces one pair many times.
+#
+# It cannot go further than "read this", and the reason is worth being honest about: somebody
+# answering a Hebrew friend and an English colleague in turn produces exactly this shape, and that
+# is the product's main use case rather than a defect. What separates the two is not in these
+# lines - in the run that prompted this check, every switch by one of the two Claude keys came back
+# SWITCH_FAILED, meaning the window it named was not the one in front. So treat a hit here as a
+# stretch of log to read, never as a count of things that are wrong.
+$PairWindowMinutes = 10
+foreach ($place in $switches | Group-Object Where) {
+    $inPlace = @($place.Group | Sort-Object At)
+
+    $reversals = @(for ($i = 1; $i -lt $inPlace.Count; $i++) {
+        if ($inPlace[$i].Key -ne $inPlace[$i - 1].Key -and $inPlace[$i].Language -ne $inPlace[$i - 1].Language) {
+            [pscustomobject]@{
+                At   = $inPlace[$i].At
+                Pair = (@($inPlace[$i - 1].Key, $inPlace[$i].Key) | Sort-Object) -join ' and '
+            }
+        }
+    })
+
+    foreach ($pair in $reversals | Group-Object Pair) {
+        $times = @($pair.Group.At | Sort-Object)
+        for ($i = 0; $i -lt $times.Count; $i++) {
+            $burst = @($times | Where-Object { $_ -ge $times[$i] -and ($_ - $times[$i]).TotalMinutes -le $PairWindowMinutes })
+            if ($burst.Count -ge 3) {
+                $problems += "two contexts on $($place.Name) reversing each other: $($pair.Name), " +
+                             "$($burst.Count) times from $($burst[0].ToString('yyyy-MM-dd HH:mm:ss')) " +
+                             "to $($burst[-1].ToString('HH:mm:ss'))"
+                break
+            }
+        }
+    }
+}
+
 # Memory churn. One change is a conversation whose language genuinely moved. Repeated changes are
 # the product arguing with itself, which is what the typing guard used to do.
 foreach ($group in $decisions | Where-Object { $_.Memory -and $_.Memory -ne 'none' } | Group-Object Key) {
@@ -227,7 +283,11 @@ if ($problems.Count -eq 0) {
     exit 0
 }
 
-Write-Host "$($problems.Count) thing(s) worth looking at:" -ForegroundColor Yellow
-foreach ($problem in $problems | Select-Object -Unique) { Write-Host "  - $problem" }
-Write-Host "`nThese are the shapes of the two defects found during acceptance. See docs/ACCEPTANCE.md."
+# Counted after the dedupe, not before. It used to announce eleven things and then print seven,
+# which sends you looking for four findings that were never there.
+$unique = @($problems | Select-Object -Unique)
+Write-Host "$($unique.Count) thing(s) worth looking at:" -ForegroundColor Yellow
+foreach ($problem in $unique) { Write-Host "  - $problem" }
+Write-Host "`nThese are shapes worth reading, not a count of defects - two contexts reversing each"
+Write-Host "other is also what a person answering two people in turn looks like. Go to the lines."
 exit 1

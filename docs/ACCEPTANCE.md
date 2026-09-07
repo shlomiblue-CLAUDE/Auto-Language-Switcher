@@ -454,7 +454,8 @@ Fill in when run. An empty row is more useful than an assumed one.
 
 | Check | Date | Result | Notes |
 |---|---|---|---|
-| Automated suite (371 tests) | 2026-09-05 | PASS | 152 Core, 97 Agent, 122 TypeScript. Counted from the build output, not carried forward from a previous number |
+| Automated suite (371 tests) | 2026-09-07 | PASS | 152 Core, 97 Agent, 122 TypeScript. Counted from the build output, not carried forward from a previous number |
+| Log review — two days of real use | 2026-09-07 | PASS, no product defect | 5069 decisions, 234 switches, 190 conversations, 18ms average and 78ms worst. Zero flip-flops within a conversation. The title normalisation is confirmed in production: the bidi-marked duplicate key stops appearing at 11:43 on 09-05 and never returns. Every memory change resolves to a person changing layout by hand, learned and then cooled down |
 | Privacy audit | 2026-09-03 | PASS, 1 skipped | Store empty; stored-data check did not run |
 | Bridge smoke test (5) | 2026-09-03 | PASS | Against the installed build |
 | Manual A — selectors | 2026-09-03 | FAIL, then PASS | Direction was dead; adapter v2.0.0 resolves 19/19 live, 0 disagreements |
@@ -471,6 +472,36 @@ Fill in when run. An empty row is more useful than an assumed one.
 | F23 — typing does not change the key | 2026-09-05 | PASS | The fix confirmed against the live window rather than against the test that asserts it: the title carried the marker, the raw hash of it did not appear in the log, the normalised one did |
 
 ---
+
+### What two days of real use found, and where it was
+
+Nothing in the product. Both findings were in the tool that reads the log, which is the tool the
+whole real-use round depends on.
+
+**It could not see two contexts reversing each other.** The flip-flop check groups by conversation
+key, so a pair of windows in one application taking turns at the keyboard is invisible to it: each
+key is perfectly consistent, switching to the language it remembers every time. It was found by
+reading eight minutes of log by hand, which does not scale. A rate-based check now looks for one
+pair reversing three or more times in ten minutes.
+
+That check took three attempts, and the first two are the useful part. The first flagged every
+adjacent pair of switches in one place and produced thirty-seven findings on WhatsApp Web, all of
+them somebody moving from an English chat to a Hebrew one - the product's main use case reported as
+a defect. The second required the alternations to be adjacent in time and then missed the Claude
+case it was written for, whose reversals were ninety seconds apart. **Rate, not proximity.**
+
+And it still cannot separate a fight from a person answering two people in turn. That is stated in
+the output rather than hidden, because a number that looks like a defect count and is not one is
+worse than no check.
+
+**It counted before it deduplicated**, announcing eleven findings and printing seven.
+
+**One anomaly is left open.** A second Claude window attempted five layout switches over two days
+and every one came back `SWITCH_FAILED` - the window it named was not the one in front by the time
+the message was posted, about a second later. Nothing was harmed; `KeyboardLayoutService.Switch`
+re-reads the foreground and refused each time, which is the guard doing exactly its job. But five
+out of five is a pattern rather than a race, and the window is not identifiable from a salted hash.
+Worth watching for; not worth speculative surgery.
 
 ## Definition of done (PDR section 17)
 
