@@ -549,9 +549,33 @@ honest. It remains the field most likely to decide how long approval takes.
 
 **Launch, none of it code.** In the order the lead times demand:
 
-1. **Code-signing certificate.** Not started, and the longest pole by far. Without it SmartScreen
-   blocks the installer and almost nobody installs. OV needs weeks of reputation; EV is immediate
-   and costs more.
+1. **Code-signing certificate.** Not started, and no longer only about store friction — Defender
+   deletes this binary rather than warning about it. Priced 2026-09-07:
+
+   | | Cost | Catch |
+   |---|---|---|
+   | Azure Artifact Signing, Basic | **$9.99/month**, 5,000 signatures | **Individuals: US and Canada only.** Organisations include Israel. Needs a paid Azure subscription, and issues no EV |
+   | Sectigo, individual or OV | ~$220–280/year | One of the last CAs still selling to a person rather than a company. Hardware token required |
+   | Sectigo EV | ~$280–300/year | Needs a registered legal entity |
+   | DigiCert EV | ~$560–645/year | Same, and dearer for no reputation benefit |
+
+   **This paragraph used to say EV buys immediate reputation and OV needs weeks. That has been
+   wrong since 2024**, when Microsoft removed instant SmartScreen reputation for EV in its Trusted
+   Root Program requirements. EV and OV now accumulate reputation identically, per file hash. So
+   the expensive certificate is no longer the fast one, and DigiCert EV at four times the price of
+   Sectigo OV buys nothing this product needs.
+
+   Two constraints decide the choice here, and neither is the price. **Azure Artifact Signing is
+   $10 a month and needs no hardware token, but individual validation is US and Canada only** — an
+   Israeli would need a registered entity, which qualifies under organisation validation. Without
+   one, it is Sectigo at roughly twice the annual cost, plus a FIPS token to keep safe. Since
+   15 February 2026 certificates last at most one year, so this is a recurring cost either way.
+
+   **Free, and worth doing first:** submit the binary to Microsoft at
+   `microsoft.com/wdsi/filesubmission` as a false positive. It is what both the Defender
+   documentation and the Artifact Signing FAQ point to for exactly this, it costs nothing, and it
+   resolves in days rather than weeks. It does not replace signing; it might unblock the people
+   testing the product now.
 2. **Privacy policy at a public URL.** Mandatory for Chrome Web Store approval. `web/privacy.html`
    is written and needs hosting.
 3. **Three 1280×800 screenshots** from a *test* account with invented conversations. Not the real

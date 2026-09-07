@@ -237,12 +237,22 @@ The longest lead time in the whole launch, and unrelated to any code.
 Without a signing certificate, SmartScreen warns on the companion program's installer and most
 people stop there. That makes it the gate on adoption, not the store listing.
 
-| | Cost/year | Reputation |
-|---|---|---|
-| OV certificate | ~$200–400 | Builds over weeks of downloads; warnings until then |
-| EV certificate | ~$300–500 | Immediate; hardware token required |
+Priced 2026-09-07:
 
-For a consumer download with no existing reputation, EV is the one that works on day one.
+| | Cost | Note |
+|---|---|---|
+| Azure Artifact Signing, Basic | $9.99/month | No hardware token. **Individual validation is US and Canada only**; organisations include Israel. Paid Azure subscription required. Issues no EV |
+| Sectigo individual / OV | ~$220–280/year | Still sold to a person rather than a company. FIPS token required |
+| Sectigo EV | ~$280–300/year | Registered legal entity required |
+| DigiCert EV | ~$560–645/year | Same, at roughly twice the price |
+
+**Reputation is now identical across all of them.** This table used to say EV was immediate and
+worth the premium for a consumer download with no history. Microsoft removed instant SmartScreen
+reputation for EV in 2024, in its Trusted Root Program requirements; reputation accrues per file
+hash for OV and EV alike. Nothing here buys a first-day pass, so the cheapest certificate that can
+actually be obtained is the right one.
+
+Certificates have been capped at one year since 15 February 2026, so this is a recurring cost.
 
 Once a certificate exists, `installer/AutoLang.iss` signs during the build:
 
