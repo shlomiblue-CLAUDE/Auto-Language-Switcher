@@ -139,10 +139,27 @@ fields['12-review-note-website-content'] = blockquoteAfter(
   'website content review note',
 );
 
+fields['13-privacy-policy-url'] = blockquoteAfter(
+  findLine((l) => l.startsWith('**Privacy policy URL**')),
+  'privacy policy URL',
+);
+
+fields['14-support-url'] = blockquoteAfter(
+  findLine((l) => l.startsWith('**Support / contact**')),
+  'support URL',
+);
+
 // --- Checks -------------------------------------------------------------------------------------
 
 if (fields['02-summary'] && fields['02-summary'].length > 132) {
   problems.push(`summary is ${fields['02-summary'].length} characters; the form allows 132`);
+}
+
+// A URL field that is not a URL is the kind of thing that reaches a form intact and stops it dead.
+for (const urlField of ['13-privacy-policy-url', '14-support-url']) {
+  if (fields[urlField] && !/^https:\/\/\S+$/.test(fields[urlField])) {
+    problems.push(`${urlField} is not a bare https URL: ${JSON.stringify(fields[urlField])}`);
+  }
 }
 
 const zipPath = join(repo, 'dist/extension.zip');
@@ -222,20 +239,34 @@ Assembled by \`tools/make-store-package.mjs\`. Every text file under \`listing/\
 | \`privacy-policy.html\` | Needs hosting; the form wants a URL, not a file |
 | \`screenshots/\` | Empty, deliberately. See WHAT-TO-CAPTURE.txt |
 
-## Still blocked, and by what
+## Done, and checked live
 
-- [ ] **Privacy policy at a public URL.** Mandatory. The file is here; it needs somewhere to live.
-- [ ] **Three screenshots.** Needs a test account, not the real one.
-- [ ] **Companion program at a public download URL**, linked from the description. Without it the
-      extension installs and does nothing, because no browser API can change a keyboard layout.
+Making the repository public closed four of these at once. Each URL was requested and returned 200
+before being written into the listing:
+
+- Privacy policy — \`listing/13-privacy-policy-url.txt\`
+- Support and contact — \`listing/14-support-url.txt\`, which is also where the privacy policy now
+  points instead of at a repository nobody could reach
+- Companion program download — named in the description, 9.2MB, downloads
+- Source — public, which is what makes the site's "free and open source" true
+
+## Still blocked
+
+- [ ] **Three screenshots.** The one thing here that needs a person. See
+      \`screenshots/WHAT-TO-CAPTURE.txt\`. Two of the three need no chat account at all, and the
+      third can use WhatsApp's own "Message yourself" — a real conversation, invented content, no
+      third party.
 - [ ] **Developer account**, one-off \\$5, with identity verification.
-- [ ] **A contact route that exists.** \`web/privacy.html\` currently says to open an issue on the
-      project repository, and that repository is private. A privacy policy whose contact address
-      cannot be reached is worse than one without a contact section, and the form asks for a
-      support email separately. Either make the repository public, or put an address in both
-      places. Which address is yours to choose — this script will not invent one.
 
-None of these are code, and none can be automated from here.
+## Worth deciding before you submit
+
+The **code-signing certificate** does not block this submission — the store signs the extension
+itself. It blocks people running what they download: Defender currently quarantines the unsigned
+companion rather than warning about it. The release notes say so plainly instead of letting anyone
+discover it, which is the right thing to do while it is true and not a substitute for fixing it.
+
+Free and worth doing today: submit the binary to Microsoft at microsoft.com/wdsi/filesubmission as
+a false positive.
 
 ## Not blocking, but decide before you submit
 

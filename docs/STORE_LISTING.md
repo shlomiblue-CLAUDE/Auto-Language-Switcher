@@ -84,9 +84,14 @@ never write in.
 REQUIREMENTS
 
 • Windows 10 or 11
-• The Auto Language Switcher companion program (linked below) — a browser extension cannot
-  change a keyboard layout; only a native program can
+• The Auto Language Switcher companion program — a browser extension cannot change a keyboard
+  layout; only a native program can. Free, open source, and downloaded from:
+  https://github.com/shlomiblue-CLAUDE/Auto-Language-Switcher/releases/latest
 • The languages you want it to use, already added as Windows keyboard layouts
+
+The companion program is not yet code-signed, so Windows may warn about it or quarantine it. The
+download explains what that means and how to check it. The source is public:
+https://github.com/shlomiblue-CLAUDE/Auto-Language-Switcher
 
 ```
 
@@ -179,7 +184,13 @@ content:
 
 All three certifications apply: no selling data, no unrelated use, no creditworthiness use.
 
-**Privacy policy URL** — required for approval. Publish `web/privacy.html` and link it here.
+**Privacy policy URL** — required for approval, and live:
+
+> https://shlomiblue-claude.github.io/Auto-Language-Switcher/privacy.html
+
+**Support / contact** — the form asks separately, and the privacy policy points at the same place:
+
+> https://github.com/shlomiblue-CLAUDE/Auto-Language-Switcher/issues
 
 ---
 
