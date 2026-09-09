@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy — Auto Language Switcher</title>
+<meta name="description" content="Auto Language Switcher processes everything locally. No server, no account, no network requests.">
+<link rel="icon" href="icons/icon32.png">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --fg: #16161a; --muted: #55555f; --line: #e4e4ea;
+    --panel: #f8f8fb; --accent: #4f46e5; --code: #f1f1f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #131316; --fg: #ececf1; --muted: #a3a3ae; --line: #2c2c33;
+      --panel: #1c1c21; --accent: #8b83f5; --code: #202027;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 0 20px 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 28px 0; }
+  .brand img { width: 26px; height: 26px; border-radius: 6px; }
+  .brand a { color: inherit; text-decoration: none; font-weight: 600; }
+  h1 { font-size: 30px; margin: 20px 0 6px; letter-spacing: -0.02em; }
+  .updated { color: var(--muted); font-size: 14px; margin: 0 0 28px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; }
+  h3 { font-size: 16px; margin: 22px 0 6px; }
+  p { margin: 0 0 13px; }
+  ul { margin: 0 0 13px; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  code { font: 13px ui-monospace, Consolas, monospace; background: var(--code); padding: 2px 5px; border-radius: 4px; }
+  pre { background: var(--code); padding: 14px; border-radius: 8px; overflow-x: auto; font: 13px/1.5 ui-monospace, Consolas, monospace; }
+  table { border-collapse: collapse; width: 100%; margin: 0 0 16px; font-size: 15px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; }
+  .lead {
+    background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 16px 18px; margin: 0 0 28px;
+  }
+  .lead p:last-child { margin-bottom: 0; }
+  footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="brand">
+    <img src="icons/icon128.png" alt="">
+    <a href="index.html">Auto Language Switcher</a>
+  </div>
+
+  <h1>Privacy</h1>
+  <p class="updated">Last updated 2 September 2026 · applies to version 0.1.0</p>
+
+  <div class="lead">
+    <p>
+      <strong>Auto Language Switcher collects nothing, transmits nothing, and has no server.</strong>
+      Your messages are counted inside your browser and discarded. Everything it remembers is three
+      small files on your own computer.
+    </p>
+    <p>
+      This page is written to be checked rather than believed. Every claim names the file that
+      implements it.
+    </p>
+  </div>
+
+  <h2>What it reads</h2>
+  <p>
+    To choose a keyboard layout, the extension reads the messages already displayed in the
+    conversation you have open, and counts letters by alphabet. It does not scroll, does not load
+    history, and does not touch conversations you have not opened.
+  </p>
+  <p>Reading a message produces numbers, not words:</p>
+<pre>reading  "מה נשמע אחי"
+becomes  { "Hebrew": 9 }</pre>
+  <p>
+    The text exists only inside the function that counts it. What leaves the page is the count.
+  </p>
+
+  <h2 id="outside">Outside the browser</h2>
+  <p>
+    It also works in applications you add yourself. This is where a keyboard switcher could quietly
+    become something else, so: <strong>it reads nothing there.</strong> Not the text in the window,
+    not what you type. Reading another application's contents needs accessibility interfaces;
+    noticing that you are typing needs a keyboard hook, which is a keylogger. Neither is in the
+    code, and a release check fails the build if either appears.
+  </p>
+  <p>
+    What it sees is which window is in front, and what it learns is the keyboard layout you chose
+    while you were there. <strong>Only applications you add</strong> — one you have not added
+    produces nothing at all, not even a note that it was open.
+  </p>
+  <p>
+    <strong>Window titles never reach your disk.</strong> They carry a channel, a person, a subject,
+    a file path, so they are hashed with a random value created on your computer, exactly as
+    conversation names are.
+  </p>
+
+  <h2>What it stores</h2>
+  <p>Three files in <code>%LOCALAPPDATA%\AutoLang</code>, which you can open and read at any time.</p>
+
+  <table>
+    <tr><th>File</th><th>Contents</th></tr>
+    <tr><td><code>settings.json</code></td><td>Your settings. No conversation data.</td></tr>
+    <tr><td><code>conversations.json</code></td><td>A hashed key, the language you type there, and a date.</td></tr>
+    <tr><td><code>sites.json</code></td><td>Which sites you have paused.</td></tr>
+    <tr><td><code>apps.json</code></td><td>The applications you allowed, by process name.</td></tr>
+  </table>
+
+  <p>A complete entry, nothing omitted:</p>
+<pre>{
+  "9f2a4c8e1b3d5f7009f2a4c8e1b3d5f7": {
+    "Mode": "Auto",
+    "LastReliableLanguage": "Hebrew",
+    "UpdatedAt": "2026-09-02T18:10:01Z"
+  }
+}</pre>
+
+  <p>
+    That is everything remembered about a conversation: you type Hebrew in it. No messages, no
+    names, no numbers, no history.
+  </p>
+
+  <h2>Conversation names and phone numbers</h2>
+  <p>
+    WhatsApp identifies conversations by phone number. None is ever stored.
+  </p>
+  <p>
+    Before anything leaves the page, the identifier is hashed with SHA-256 and a random value
+    created when you installed. The random value matters: without it, a hash of a phone number can
+    be reversed by trying every number in a country, and the same contact would produce the same
+    key on every machine in the world. With it, the file is meaningless anywhere but your computer.
+  </p>
+  <p>
+    The Windows program additionally <strong>refuses</strong> any key that is not already a hash, so
+    the guarantee does not depend on the browser side behaving correctly.
+  </p>
+
+  <h2>What it never does</h2>
+  <ul>
+    <li><strong>No network requests.</strong> No analytics, no telemetry, no update check, no error reporting. The extension holds no network permission and the code contains no HTTP client.</li>
+    <li><strong>No account.</strong> Nothing to sign up for or sign in to.</li>
+    <li><strong>No AI or cloud language service.</strong> Detection is a letter count against Unicode ranges, done locally.</li>
+    <li><strong>No site you did not choose.</strong> Installing grants access to <code>web.whatsapp.com</code> and nothing else. Any other site is added by you from a button in the popup — one site, or all sites if you would rather not be asked again — and can be withdrawn the same way, which stops it reading immediately rather than at the next reload.</li>
+    <li><strong>No password or payment fields.</strong> On any site, password boxes, payment-card fields and one-time-code fields are excluded outright. They are not read, not counted, and produce no signal of any kind.</li>
+    <li><strong>No third parties.</strong> Nothing is shared, sold or disclosed, because nothing is collected.</li>
+  </ul>
+
+  <h2>Permissions</h2>
+  <table>
+    <tr><th>Permission</th><th>Why it is needed</th></tr>
+    <tr><td><code>storage</code></td><td>Holds the random value used for hashing. Nothing else.</td></tr>
+    <tr><td><code>nativeMessaging</code></td><td>Talks to the Windows program. A browser extension cannot change a keyboard layout; only a native program can.</td></tr>
+    <tr><td><code>web.whatsapp.com</code></td><td>Reads the conversation you have open. The only site granted when you install.</td></tr>
+    <tr><td><code>scripting</code></td><td>Starts the same bundled script on a site you have allowed, and stops it when you withdraw that site. No remote or generated code is ever run.</td></tr>
+    <tr><td><code>activeTab</code></td><td>Lets the popup name the site you are on, so it can offer to enable it there. Limited to the tab in front, and only while the popup is open — unlike the <code>tabs</code> permission, which would expose every tab.</td></tr>
+    <tr><td>Any other site</td><td><strong>Optional, and off until you click.</strong> Granted per site, or for all sites, from the popup. On a site you allow, it identifies the box you are typing in and counts letters by alphabet. Chrome will not grant either form without your click, and the popup always shows which state you are in.</td></tr>
+  </table>
+  <p>
+    <code>&lt;all_urls&gt;</code> is deliberately not requested, and no broad pattern is requested at
+    install time. A release check enforces that: broad access has to sit in the optional list, where
+    it means "the user may grant this", never in the required list, where installing would grant it
+    silently.
+  </p>
+
+  <h2>Checking it yourself</h2>
+  <p>Everything stored, in full:</p>
+<pre>type %LOCALAPPDATA%\AutoLang\*.json</pre>
+  <p>Searching it for anything identifying, which returns nothing:</p>
+<pre>findstr /i "972 @c.us http" %LOCALAPPDATA%\AutoLang\*.json</pre>
+  <p>
+    For outbound requests, open <code>chrome://extensions</code>, click the extension's service
+    worker, and watch the Network tab. It stays empty.
+  </p>
+
+  <h2>Deleting your data</h2>
+  <p>
+    <strong>Clear stored preferences</strong> in the tray menu or the extension's settings page
+    deletes all three files immediately.
+  </p>
+  <p>
+    Uninstalling keeps them, because uninstalling is often a reinstall. Running the uninstaller with
+    <code>-RemoveData</code> deletes those too.
+  </p>
+
+  <h2>Children</h2>
+  <p>
+    The product is not directed at children and collects no personal information from anyone, of
+    any age.
+  </p>
+
+  <h2>Changes</h2>
+  <p>
+    If a future version ever collected or transmitted anything, that would be a change of what this
+    product is, announced before release and requiring your consent. This page carries the date of
+    its last change.
+  </p>
+
+  <h2>Contact</h2>
+  <p>
+    Questions and privacy reports: <a href="https://github.com/shlomiblue-CLAUDE/Auto-Language-Switcher/issues">open an issue on the project repository</a>.
+  </p>
+
+  <footer>
+    <a href="index.html">Back to Auto Language Switcher</a>
+  </footer>
+
+</div>
+</body>
+</html>
