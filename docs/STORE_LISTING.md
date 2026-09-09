@@ -70,14 +70,23 @@ Write in a lot of places? "Use on all sites" is one click instead of one per sit
 is your click, never something the install took, and either way it can be withdrawn from the same
 button.
 
-Currently Hebrew and English.
+LANGUAGES
+
+Hebrew, English, Russian, Arabic and Greek. It tells them apart by alphabet, which is why those
+five and not more: each is written in a script of its own. Languages that share the Latin
+alphabet — Spanish, French, German — cannot be distinguished this way, and the extension does not
+pretend to. Nor can it tell Hebrew typed in Latin letters from English; "ma nishma" is English as
+far as your keyboard is concerned, which is the right answer.
+
+Settings let you narrow it to the languages you actually type, useful if you can read one you
+never write in.
 
 REQUIREMENTS
 
 • Windows 10 or 11
 • The Auto Language Switcher companion program (linked below) — a browser extension cannot
   change a keyboard layout; only a native program can
-• Hebrew and English already added as Windows keyboard layouts
+• The languages you want it to use, already added as Windows keyboard layouts
 
 ```
 
