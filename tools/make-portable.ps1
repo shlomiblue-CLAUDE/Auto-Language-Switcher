@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Assembles everything another machine needs, as one folder and one zip.
 

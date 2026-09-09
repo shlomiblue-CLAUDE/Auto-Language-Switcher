@@ -88,7 +88,7 @@
       <a class="btn secondary" href="privacy.html">How your data is handled</a>
     </div>
 
-    <p class="note">Free. Windows 10 and 11, Chrome and Edge. Hebrew and English.</p>
+    <p class="note">Free. Windows 10 and 11, Chrome and Edge. Hebrew, English, Russian, Arabic and Greek.</p>
   </header>
 
   <section>
@@ -125,7 +125,7 @@
       <li>Never switches while you are typing</li>
       <li>Never touches a window that is not in front</li>
       <li>Backs off for five minutes after you change the layout yourself</li>
-      <li>Pin any conversation to Hebrew or English and that beats everything</li>
+      <li>Pin any conversation to a language of your choosing and that beats everything</li>
       <li>Selects the layout directly — it never cycles blindly through your languages</li>
     </ul>
     <p>
@@ -162,27 +162,36 @@ becomes  { "Hebrew": 9 }</pre>
 
     <h3>1. The Windows agent</h3>
     <p>
-      A 12MB download that switches the layout and remembers your preferences. Installs for your
+      An 8.8MB download that switches the layout and remembers your preferences. Installs for your
       user account only — no administrator rights.
     </p>
 
     <h3>2. The browser extension</h3>
     <p>
-      Reads the open conversation. Requests access to <code>web.whatsapp.com</code> and nothing
-      else.
+      Installing it grants one site: <code>web.whatsapp.com</code>. Any other site is a button in
+      the popup, approved by Chrome's own dialog and withdrawn from the same button — so the
+      install itself asks for nothing beyond WhatsApp Web.
     </p>
 
     <p class="muted">
-      Hebrew and English must already be added as Windows keyboard layouts — the product switches
-      between layouts you have, it does not install them.
+      The languages you want it to use must already be added as Windows keyboard layouts — it
+      switches between layouts you have and never installs one. Hebrew, English, Russian, Arabic
+      and Greek; it tells them apart by alphabet, which is why those five and not more.
     </p>
 
     <p>
-      <a class="btn" href="https://github.com/">Get it on GitHub</a>
+      <a class="btn" href="https://github.com/shlomiblue-CLAUDE/Auto-Language-Switcher/releases/latest">Download for Windows</a>
+      <a class="btn secondary" href="https://github.com/shlomiblue-CLAUDE/Auto-Language-Switcher">Read the source</a>
     </p>
     <p class="note">
       Chrome Web Store listing pending review. Until then the extension is loaded unpacked; the
       install guide walks through it.
+    </p>
+    <p class="note">
+      <strong>Windows Defender may delete the download rather than warn about it.</strong> The
+      program is not yet code-signed, and an unsigned program that installs itself to start at
+      sign-in matches a behavioural rule. It is a judgement about shape, not a virus found in the
+      file. The read-me inside the download explains what to do and how to check for yourself.
     </p>
   </section>
 
@@ -208,22 +217,30 @@ becomes  { "Hebrew": 9 }</pre>
       keys you are about to press, not which language you are speaking.
     </p>
 
-    <h3>Other languages?</h3>
+    <h3>Which languages?</h3>
     <p>
-      Hebrew and English today. Detection works on Unicode ranges, so Russian and Arabic are a
-      small addition rather than a rewrite.
+      Hebrew, English, Russian, Arabic and Greek. Detection works on Unicode ranges, so a language
+      qualifies when it has an alphabet of its own — which is also the honest limit: Spanish,
+      French and German all use the Latin alphabet and cannot be told apart this way.
     </p>
 
     <h3>Other apps and sites?</h3>
     <p>
-      WhatsApp Web today. The architecture keeps one brain in a resident program with the browser
-      as one source of signal, so desktop apps and other sites can be added without rebuilding it.
+      Both, and they are already here. Any site you turn on from the popup, remembered per writing
+      box — so a Hebrew message and an English search on one page stay separate. And applications
+      you add in settings, remembered per window.
+    </p>
+    <p class="muted">
+      Outside the browser it reads nothing inside an application — not the text in the window, not
+      what you type. It sees which window is in front and the layout you chose while you were
+      there. Window titles are hashed before anything is stored, because they carry file paths and
+      people's names. <a href="privacy.html#outside">The privacy document says exactly why</a>.
     </p>
   </section>
 
   <footer>
     <a href="privacy.html">Privacy</a>
-    <a href="https://github.com/">Source</a>
+    <a href="https://github.com/shlomiblue-CLAUDE/Auto-Language-Switcher">Source</a>
     <p style="margin-top:14px">Free and open source. Built for people who type in two alphabets.</p>
   </footer>
 
