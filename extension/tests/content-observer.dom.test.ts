@@ -294,6 +294,27 @@ describe('ContentObserver and the cost of typing', () => {
     expect(signals()).toBe(before + 1);
   });
 
+  it('reads again when the browser window itself regains focus', async () => {
+    // The user's report, from a month of live use: coming back to the browser from another
+    // application, in a Hebrew conversation, and not being switched to Hebrew.
+    //
+    // Neither trigger above covers it. Switching applications does not change visibilityState - the
+    // tab was never hidden, only unfocused - and it moves no element's focus, so no focusin fires
+    // either: the box they left focused is still focused when they come back. What used to produce
+    // the observation on the way back was a DOM mutation or the user's own keystroke, and by the
+    // time it is their keystroke the layout is already wrong and the typing guard has the floor.
+    observer = new ContentObserver(typingAdapter());
+    observer.start();
+    await vi.advanceTimersByTimeAsync(500);
+
+    const before = signals();
+
+    window.dispatchEvent(new Event('focus'));
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(signals()).toBe(before + 1);
+  });
+
   it('stops for good when the service worker says the site is no longer allowed', async () => {
     (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue({ stop: true });
 

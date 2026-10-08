@@ -114,6 +114,20 @@ public sealed class AgentCore
         }
     }
 
+    /// <summary>
+    /// The user is looking at a different window now.
+    ///
+    /// Reported for every foreground change, including to windows this product says nothing about,
+    /// because the engine's reason for believing a layout change was deliberate is that it never
+    /// stopped watching. Under the same lock as a decision: it moves engine state, and a signal
+    /// arriving on the pipe thread mid-update is how the two sources would disagree about what the
+    /// layout was.
+    /// </summary>
+    public void NoteLookedAway()
+    {
+        lock (_gate) _engine.NoteLookedAway();
+    }
+
     /// <summary>An allowed application is paused the same way a site is, so the engine needs no new rule.</summary>
     private static SiteState ToSiteState(AppState app) => new() { Paused = app.Paused };
 

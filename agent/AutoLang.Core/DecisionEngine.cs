@@ -49,6 +49,21 @@ public sealed class DecisionEngine
     /// conversation happens to be in view, so moving between two conversations while the layout
     /// differs would be read as an override and put the arriving conversation into a five minute
     /// cooldown it never earned. A stability test that walks several conversations caught that.
+    ///
+    /// Both halves were still not enough, and a month of live log says how badly. "Between two
+    /// observations" has to mean *consecutive* observations of a conversation nobody looked away
+    /// from - and the browser side had no way to know it had looked away. The user leaves Chrome
+    /// for another application, types English there, comes back to a Hebrew chat: the next signal
+    /// carries the same conversation key and a different layout, which is this condition exactly,
+    /// so arriving home was recorded as a deliberate override. 183 of 310 overrides in the log were
+    /// that, and each one cost three things - the switch the user wanted, their conversation's
+    /// remembered language (295 of 310 were overwritten with the layout they merely arrived with),
+    /// and five minutes of cooldown in which the product would not correct itself.
+    ///
+    /// <see cref="NoteLookedAway"/> is what makes "nobody looked away" true. ForegroundWatcher
+    /// already states the principle for the desktop - arriving at a window with a different layout
+    /// is where the user came from, not a choice they made here - and this is that principle
+    /// finally reaching the browser, which never had it.
     /// </summary>
     private string? _lastObservedIn;
 
@@ -76,8 +91,16 @@ public sealed class DecisionEngine
 
         // Windows does not enforce this for us; the spike proved a background window switches just
         // as readily as a foreground one. If we do not refuse here, nothing will.
+        //
+        // An observation from the background is also proof that we are no longer watching the place
+        // it came from, so the override baseline goes with it. This returns before the baseline is
+        // written below, which used to mean a background stretch left a stale one standing: the log
+        // has 14 overrides detected across a gap the product could see it had not been looking at.
         if (!request.TargetIsForeground)
+        {
+            NoteLookedAway();
             return Suppressed(DecisionBlocker.NotForeground);
+        }
 
         // --- The user changed the layout themselves. ---
         //
@@ -348,6 +371,33 @@ public sealed class DecisionEngine
             Source = source,
             Confidence = confidence,
         };
+
+    /// <summary>
+    /// The user's attention moved somewhere else, so stop treating the layout we last saw as the
+    /// baseline for noticing a manual change.
+    ///
+    /// Called when the foreground window changes, which is the only moment at which a layout can
+    /// move without either us or the user having touched it *here*: they went to another
+    /// application, the layout there was different, and they came back. That is not an override.
+    /// It was being recorded as one more than half the time - see <see cref="_lastObservedIn"/> for
+    /// what it cost - and the user's report that opened the diagnosis was the symptom in one line:
+    /// coming back to the browser from somewhere English, in a Hebrew conversation, and not being
+    /// switched to Hebrew.
+    ///
+    /// Only the baseline is dropped. Hysteresis, the cooldown and the anti-echo record of what we
+    /// imposed all survive looking away, because none of them is a statement about one window.
+    ///
+    /// Deliberately not a timer. The first version of this fix aged the baseline out after fifteen
+    /// seconds, and the log killed it: on chatgpt.com 37% of consecutive looks at one conversation
+    /// are already more than fifteen seconds apart, so a window wide enough to keep real overrides
+    /// there was far too wide to stop the false ones here. Asking Windows what the user is looking
+    /// at needs no threshold and is right in both places.
+    /// </summary>
+    public void NoteLookedAway()
+    {
+        _lastObservedIn = null;
+        _lastObservedLayout = Language.Unknown;
+    }
 
     /// <summary>
     /// Records that the user changed the layout themselves. Resets hysteresis, so the product

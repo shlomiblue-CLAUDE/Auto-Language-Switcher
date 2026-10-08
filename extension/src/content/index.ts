@@ -120,6 +120,20 @@ export class ContentObserver {
       if (document.visibilityState === 'visible') this.schedule();
     });
 
+    // Coming back to the browser from another application, which neither of the two above sees.
+    //
+    // Switching apps does not change visibilityState - the tab was never hidden, only unfocused -
+    // and it moves no element's focus, so no focusin fires either. The box the user left focused is
+    // still focused when they return. So the only thing that used to produce an observation on the
+    // way back was a DOM mutation or the user's own keystroke, and the difference shows: on
+    // WhatsApp, which mutates constantly, something fires within seconds, while on a quiet page the
+    // first thing the product heard about the user's return was them typing, with the layout from
+    // whatever application they came from still in place.
+    //
+    // Window focus is the event that does fire, every time, which is what the user asked the
+    // product to act on.
+    window.addEventListener('focus', () => this.schedule(), { passive: true });
+
     // Typing is the only evidence about the user's keyboard that is not an inference, so it has to
     // be observed - but see lastSignalFingerprint for why it is the one trigger that is filtered.
     // On a site with no adapter of its own this is also the only way the composer is ever seen to

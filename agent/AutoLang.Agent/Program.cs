@@ -111,6 +111,7 @@ using var watcher = new ForegroundWatcher(
     layouts,
     isAllowed: name => store.GetApp(name) is not null,
     onWindow: core.ObserveWindow,
+    onLookedAway: core.NoteLookedAway,
     log: Log);
 
 watcher.Start();

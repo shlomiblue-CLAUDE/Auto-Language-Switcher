@@ -209,6 +209,81 @@ public class DecisionEngineTests
     }
 
     [Fact]
+    public void Coming_back_from_another_application_is_not_an_override()
+    {
+        // The defect a month of live log was full of, and the one the user reported in one line:
+        // they leave the browser for something English, come back to a Hebrew chat, and are left in
+        // English.
+        //
+        // Nothing about the conversation changed while they were gone. The signal that arrives on
+        // their return carries the same key and a layout that moved, which is the manual-change
+        // condition exactly - so the product read arriving home as "the user chose English here",
+        // suppressed the switch, overwrote the conversation's remembered Hebrew with English, and
+        // started five minutes of cooldown in which it would not correct itself. 183 of the 310
+        // overrides in the log were this, and 295 of 310 overwrote a memory.
+        var remembersHebrew = new ConversationPreference
+        {
+            LastReliableLanguage = Language.Hebrew,
+            UpdatedAt = _clock.Now,
+        };
+
+        // In the chat, Hebrew already in place. This is the look the engine will compare against.
+        var settled = Decide(Request(currentLayout: Language.Hebrew), preference: remembersHebrew);
+        Assert.Equal(DecisionBlocker.AlreadyCorrect, settled.Blocker);
+
+        // Away to another application, which is where the layout becomes English. The watcher sees
+        // the foreground change and says so; this is that call.
+        _engine.NoteLookedAway();
+        _clock.Advance(TimeSpan.FromMinutes(2));
+
+        var back = Decide(Request(currentLayout: Language.English), preference: remembersHebrew);
+
+        Assert.Equal(DecisionOutcome.Switch, back.Outcome);
+        Assert.Equal(Language.Hebrew, back.Language);
+        Assert.Equal(DecisionSource.ConversationMemory, back.Source);
+
+        // And the three costs are all gone with it: no override recorded, so no cooldown, and the
+        // conversation does not learn the language of the application they came from.
+        Assert.False(back.UserOverrode);
+        Assert.NotEqual(Language.English, back.LearnedLanguage);
+    }
+
+    [Fact]
+    public void Looking_away_does_not_cost_the_product_a_real_override()
+    {
+        // The other half, and the reason the fix is a question to Windows rather than a timer. A
+        // user who sits in one conversation for as long as they like and then reaches for Alt+Shift
+        // must still be noticed - that is the Google Sheets case above, where no composer is ever
+        // occupied and this rule is the only thing that learns anything.
+        Decide(Request(currentLayout: Language.English));
+
+        _clock.Advance(TimeSpan.FromMinutes(20));
+        var overridden = Decide(Request(currentLayout: Language.Hebrew));
+
+        Assert.Equal(DecisionBlocker.ManualChange, overridden.Blocker);
+        Assert.True(overridden.UserOverrode);
+        Assert.Equal(Language.Hebrew, overridden.LearnedLanguage);
+    }
+
+    [Fact]
+    public void An_observation_from_the_background_also_means_we_looked_away()
+    {
+        // A signal that arrives while the browser is behind something else is proof of the same
+        // thing the foreground change reports, and it used to be the one path that returned before
+        // the baseline was touched - leaving a stale one standing across an absence the product
+        // could see. Fourteen of the overrides in the log came in through this door.
+        Decide(Request(currentLayout: Language.Hebrew));
+
+        var backgrounded = Decide(Request(currentLayout: Language.Hebrew, foreground: false));
+        Assert.Equal(DecisionBlocker.NotForeground, backgrounded.Blocker);
+
+        var back = Decide(Request(currentLayout: Language.English));
+
+        Assert.NotEqual(DecisionBlocker.ManualChange, back.Blocker);
+        Assert.False(back.UserOverrode);
+    }
+
+    [Fact]
     public void A_noted_manual_change_hands_the_layout_back_to_the_user()
     {
         // NoteManualChange is how the Agent reports that the user took over. After it, even the

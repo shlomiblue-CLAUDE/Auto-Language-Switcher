@@ -125,6 +125,44 @@ public class AgentCoreTests : IDisposable
         Assert.Equal(ErrorCodes.LayoutNotInstalled, reply.ErrorCode);
     }
 
+    [Fact]
+    public void Returning_to_the_browser_from_another_application_switches_rather_than_backing_off()
+    {
+        // The whole round trip for the report that opened this: "when I come back from somewhere
+        // that is not the browser, in English, to a Hebrew conversation, it does not change to
+        // Hebrew by itself."
+        //
+        // Written at this level because the defect was in the seam. The engine's rule was right
+        // about what it could see, the extension sent what it was asked to, and the store did as it
+        // was told; what nobody owned was the fact that the user had left. Asserting it on the
+        // engine alone would have proved the rule and missed the product.
+
+        // A Hebrew conversation, settled: the user typed Hebrew here, so Hebrew is remembered and
+        // the layout is already right.
+        _layouts.Current = Language.Hebrew;
+        _core.Handle(Signal(language: "Hebrew", composerEmpty: false));
+        Assert.Equal(Language.Hebrew, _store.GetConversation(HashedKey)!.LastReliableLanguage);
+
+        // Off to another application - Outlook, Word, anything; it is in no allowlist and this
+        // product knows nothing about it. English there.
+        _core.NoteLookedAway();
+        _layouts.Current = Language.English;
+        _clock.Advance(TimeSpan.FromMinutes(3));
+
+        // And back to the same chat. The page looks exactly as they left it, so the only thing that
+        // moved is the layout.
+        _layouts.SwitchRequests.Clear();
+        var reply = Parse<DecisionMessage>(_core.Handle(Signal(language: "Hebrew")));
+
+        Assert.Equal("Switch", reply.Outcome);
+        Assert.Equal([Language.Hebrew], _layouts.SwitchRequests);
+
+        // And it did not conclude anything about the user from the layout they walked in with.
+        var stored = _store.GetConversation(HashedKey)!;
+        Assert.Equal(Language.Hebrew, stored.LastReliableLanguage);
+        Assert.Null(stored.ManualOverrideAt);
+    }
+
     // --- The Agent trusts Windows, not the page ----------------------------------------------
 
     [Fact]

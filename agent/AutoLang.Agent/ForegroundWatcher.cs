@@ -39,6 +39,20 @@ public sealed class ForegroundWatcher : IDisposable
     private readonly IKeyboardLayoutService _layouts;
     private readonly Func<string, bool> _isAllowed;
     private readonly Action<string, string> _onWindow;
+
+    /// <summary>
+    /// Reports that the user is now looking at a different window, whichever one it is.
+    ///
+    /// Fired before every filter below, and that is the point. The browser is skipped as a signal
+    /// source, unlisted applications are skipped entirely, and neither of those is a reason to go
+    /// on believing the layout we last saw belongs to where the user is now. Leaving Chrome for
+    /// Outlook and coming back is the exact case the engine was getting wrong, and Outlook is in
+    /// nobody's allowlist.
+    ///
+    /// Carries no window, no title and no process name - only that the context changed.
+    /// </summary>
+    private readonly Action _onLookedAway;
+
     private readonly Action<string> _log;
 
     // Held so the delegate is not collected while Windows still holds a pointer to it. This is the
@@ -75,11 +89,13 @@ public sealed class ForegroundWatcher : IDisposable
         IKeyboardLayoutService layouts,
         Func<string, bool> isAllowed,
         Action<string, string> onWindow,
+        Action? onLookedAway = null,
         Action<string>? log = null)
     {
         _layouts = layouts;
         _isAllowed = isAllowed;
         _onWindow = onWindow;
+        _onLookedAway = onLookedAway ?? (() => { });
         _log = log ?? (_ => { });
         _callback = OnWinEvent;
     }
@@ -153,6 +169,21 @@ public sealed class ForegroundWatcher : IDisposable
         // A name change on a button or a list item is not a change of context. Without this filter
         // a busy application would report several times a second.
         if (eventId == EventObjectNameChange && idObject != ObjidWindow) return;
+
+        // The user moved to another window. Said first, before anything is read and before any of
+        // the filters below can return, because every one of those returns is a case where the
+        // engine must still be told it has looked away.
+        //
+        // Foreground changes only. A window renaming itself is a change of context too, but it
+        // produces a different conversation key, which the engine already tells apart - whereas a
+        // rename that normalises back to the same key is somebody sitting still and typing, and
+        // dropping the baseline under them would lose the manual change this watcher exists to
+        // catch.
+        if (eventId == EventSystemForeground)
+        {
+            try { _onLookedAway(); }
+            catch (Exception ex) { _log($"window watcher looked-away: {ex.Message}"); }
+        }
 
         try
         {
