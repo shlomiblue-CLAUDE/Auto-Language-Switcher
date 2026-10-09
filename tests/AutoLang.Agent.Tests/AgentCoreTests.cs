@@ -415,10 +415,13 @@ public class AgentCoreTests : IDisposable
 
         var reply = Parse<DecisionMessage>(_core.Handle(Signal()));
 
-        // Either guard is a correct refusal; what matters is that we do not immediately undo the
-        // user's own choice.
-        Assert.Equal("Suppressed", reply.Outcome);
-        Assert.Contains(reply.Blocker, new[] { "ManualCooldown", "Hysteresis" });
+        // What matters is that we do not immediately undo the user's own choice, and nothing is
+        // applied. The outcome is no longer a refusal and should not be: the override wrote English
+        // into memory, memory outranks the Hebrew on the page, and the layout is already English -
+        // so the honest answer is that it is already correct rather than that something was
+        // suppressed. Asserting "Suppressed" here was asserting the mechanism.
+        Assert.NotEqual("Switch", reply.Outcome);
+        Assert.Equal("en-US", reply.Language);
         Assert.Empty(_layouts.SwitchRequests);
     }
 

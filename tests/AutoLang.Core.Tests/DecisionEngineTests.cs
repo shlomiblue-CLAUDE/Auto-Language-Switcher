@@ -204,8 +204,85 @@ public class DecisionEngineTests
             Request([Outgoing(Language.English, 30)], currentLayout: Language.Hebrew),
             preference: asStored);
 
+        // The property, which is what this test is for: the page says English and the layout is not
+        // moved off the Hebrew the user chose.
         Assert.NotEqual(DecisionOutcome.Switch, next.Outcome);
-        Assert.Equal(DecisionBlocker.ManualCooldown, next.Blocker);
+        Assert.Equal(Language.Hebrew, next.Language);
+
+        // It used to assert ManualCooldown here, and that was asserting the mechanism rather than
+        // the behaviour - on a mechanism that turned out not to be the one doing the work. What
+        // holds the line is the precedence order: the override wrote Hebrew into memory, and memory
+        // outranks the page, so Hebrew wins on the evidence and there is nothing left to refuse.
+        // Saying AlreadyCorrect is simply true.
+        Assert.Equal(DecisionBlocker.AlreadyCorrect, next.Blocker);
+    }
+
+    [Fact]
+    public void The_cooldown_does_not_stop_us_putting_the_users_own_choice_back()
+    {
+        // Reported: "when I come back from English to this document in Hebrew it stays English."
+        //
+        // The user sets Hebrew by hand, which is recorded as an override and starts five minutes in
+        // which the product stops arguing. Then they step away, come back with English in place -
+        // and were left in English, because the cooldown suppressed the switch that would have put
+        // their own Hebrew back. Restoring a choice is not arguing with it.
+        var theyChoseHebrew = new ConversationPreference
+        {
+            LastReliableLanguage = Language.Hebrew,
+            ManualOverrideAt = _clock.Now,
+            UpdatedAt = _clock.Now,
+        };
+
+        _clock.Advance(TimeSpan.FromSeconds(30));
+        _engine.NoteLookedAway();
+
+        var back = Decide(Request(currentLayout: Language.English), preference: theyChoseHebrew);
+
+        Assert.Equal(DecisionOutcome.Switch, back.Outcome);
+        Assert.Equal(Language.Hebrew, back.Language);
+        Assert.Equal(DecisionSource.ConversationMemory, back.Source);
+    }
+
+    [Fact]
+    public void The_cooldown_still_holds_against_a_language_the_user_did_not_choose()
+    {
+        // The case the guard was written for, and the reason the exemption is a comparison rather
+        // than a deletion. Once memory is older than its TTL it stops outranking analysis, so the
+        // engine can reach a language that is nobody's choice - and during a cooldown it must not
+        // apply one.
+        var stale = new ConversationPreference
+        {
+            LastReliableLanguage = Language.Hebrew,
+            ManualOverrideAt = _clock.Now,
+            UpdatedAt = _clock.Now - TimeSpan.FromDays(100),
+        };
+
+        var decision = Decide(
+            Request([Outgoing(Language.English, 30)], currentLayout: Language.Hebrew),
+            preference: stale);
+
+        Assert.Equal(DecisionOutcome.Suppressed, decision.Outcome);
+        Assert.Equal(DecisionBlocker.ManualCooldown, decision.Blocker);
+    }
+
+    [Fact]
+    public void An_override_that_named_no_language_still_waits_the_whole_cooldown_out()
+    {
+        // NoteManualOverride keeps the language it already had when handed Unknown, so an override
+        // on a conversation nothing was known about leaves nothing to compare a target against.
+        // With no choice on record there is no restoring to be done, and the guard applies in full.
+        var noLanguage = new ConversationPreference
+        {
+            LastReliableLanguage = Language.Unknown,
+            ManualOverrideAt = _clock.Now,
+            UpdatedAt = _clock.Now,
+        };
+
+        var decision = Decide(
+            Request([Outgoing(Language.Hebrew, 30)], currentLayout: Language.English),
+            preference: noLanguage);
+
+        Assert.Equal(DecisionBlocker.ManualCooldown, decision.Blocker);
     }
 
     [Fact]

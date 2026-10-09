@@ -187,9 +187,35 @@ public sealed class DecisionEngine
             return Suppressed(DecisionBlocker.LanguageDisabled, source, confidence);
 
         // A pin is the user's explicit instruction, so it outranks the cooldown that exists to
-        // stop us arguing with them. Every other source must wait the cooldown out.
-        if (source != DecisionSource.ManualPin && IsInManualCooldown(preference, settings, request.ObservedAt))
+        // stop us arguing with them.
+        //
+        // So does the cooldown's own subject. Switching *to* the language the override established
+        // is not arguing with the user, it is putting their choice back - and that is the only
+        // thing the cooldown was measurably doing. All 2835 cooldown suppressions in a month of
+        // live log had a remembered language; in 2467 the layout already matched it, so nothing
+        // would have happened anyway, and in the other 368 the layout contradicted it and a restore
+        // was blocked. Not one of them stopped a switch to anything else, and the reason is
+        // structural rather than lucky: memory outranks analysis, an override always writes memory,
+        // so while the cooldown is running the only language the engine can arrive at is the one the
+        // user picked.
+        //
+        // The user's report, after setting Hebrew in a document and coming back to it: "when I come
+        // back from English to this document in Hebrew it stays English."
+        //
+        // The guard stays for the case it was written for, which this does not cover: a language
+        // that is not theirs. Memory older than its TTL falls through to message analysis, and an
+        // override that named no language leaves nothing to compare against - both still wait.
+        var restoringWhatTheUserChose =
+            preference?.LastReliableLanguage is { } chosen
+            && chosen != Language.Unknown
+            && language == chosen;
+
+        if (source != DecisionSource.ManualPin
+            && !restoringWhatTheUserChose
+            && IsInManualCooldown(preference, settings, request.ObservedAt))
+        {
             return Suppressed(DecisionBlocker.ManualCooldown);
+        }
 
         // Nothing to go on, and a layout in use that we did not put there.
         //
