@@ -79,19 +79,38 @@ public class AgentCoreTests : IDisposable
         bool composerEmpty = true,
         string key = HashedKey,
         long? observedAt = null,
-        string direction = "outgoing")
+        string direction = "outgoing",
+        bool contextReadable = true,
+        string site = "web.whatsapp.com")
     {
         var message = new SignalMessage
         {
-            Site = "web.whatsapp.com",
+            Site = site,
             ConversationKey = key,
             AdapterVersion = "1.0.0",
             ComposerEmpty = composerEmpty,
+            ContextReadable = contextReadable,
             ObservedAt = observedAt ?? _clock.Now.ToUnixTimeMilliseconds(),
             Messages =
             [
                 new WireMessageStats { Direction = direction, Index = 0, Counts = new Dictionary<string, int> { [language] = letters } }
             ],
+        };
+        return JsonSerializer.Serialize(message, Wire.Json);
+    }
+
+    /// <summary>What a surface with nothing readable sends: no messages, and it says so.</summary>
+    private string UnreadableSignal(string key = HashedKey, string site = "docs.google.com")
+    {
+        var message = new SignalMessage
+        {
+            Site = site,
+            ConversationKey = key,
+            AdapterVersion = "1.0.0",
+            ComposerEmpty = true,
+            ContextReadable = false,
+            ObservedAt = _clock.Now.ToUnixTimeMilliseconds(),
+            Messages = [],
         };
         return JsonSerializer.Serialize(message, Wire.Json);
     }
@@ -161,6 +180,109 @@ public class AgentCoreTests : IDisposable
         var stored = _store.GetConversation(HashedKey)!;
         Assert.Equal(Language.Hebrew, stored.LastReliableLanguage);
         Assert.Null(stored.ManualOverrideAt);
+    }
+
+    [Fact]
+    public void A_surface_with_nothing_to_read_is_learned_from_rather_than_waited_on()
+    {
+        // The spreadsheet case. Google Sheets draws its grid on a canvas, so the letters the user
+        // types are rendered and never written into the DOM; the adapter measures thirteen visible
+        // characters of Google's own interface and reports that it could not read the surface.
+        //
+        // Before this, every browser signal claimed to have read the page, so the engine treated
+        // that silence as "looked and found nothing" and waited for evidence that cannot arrive.
+        // 103 decisions on docs.google.com in one month, `memory=none` in 91% of all of them.
+        _layouts.Current = Language.Hebrew;
+
+        var reply = Parse<DecisionMessage>(_core.Handle(UnreadableSignal()));
+
+        // Hebrew is already in place, so there is nothing to switch - but the point is that the
+        // product now has an answer for this sheet instead of none.
+        Assert.Equal("NoChange", reply.Outcome);
+        Assert.Equal("he-IL", reply.Language);
+        Assert.Equal(Language.Hebrew, _store.GetConversation(HashedKey)!.LastReliableLanguage);
+
+        // Which it replays on the next visit, which is the whole value: come back to this file with
+        // English in place and it puts Hebrew back.
+        //
+        // Through NoteLookedAway, because that is what actually happens and leaving it out is a
+        // modelling error rather than a shortcut - a layout that moves while the engine believes it
+        // never stopped watching this sheet is a deliberate Alt+Shift, and it is right to read it
+        // as one. Writing this test without it is how I found that out.
+        _clock.Advance(TimeSpan.FromMinutes(10));
+        _core.NoteLookedAway();
+        _layouts.Current = Language.English;
+        _layouts.SwitchRequests.Clear();
+
+        Parse<DecisionMessage>(_core.Handle(UnreadableSignal()));
+        Assert.Equal([Language.Hebrew], _layouts.SwitchRequests);
+    }
+
+    [Fact]
+    public void What_is_already_remembered_is_never_overwritten_by_what_the_user_arrived_with()
+    {
+        // The guard that makes the rule above safe. It fills a blank; it does not get a vote
+        // against a language the user established on purpose.
+        _layouts.Current = Language.Hebrew;
+        _core.Handle(Signal(language: "Hebrew", composerEmpty: false, site: "docs.google.com"));
+        Assert.Equal(Language.Hebrew, _store.GetConversation(HashedKey)!.LastReliableLanguage);
+
+        // Back later with English in place, from an unreadable surface. The arriving layout must
+        // not become this file's remembered language.
+        _clock.Advance(TimeSpan.FromMinutes(10));
+        _layouts.Current = Language.English;
+        _core.NoteLookedAway();
+
+        _core.Handle(UnreadableSignal());
+
+        Assert.Equal(Language.Hebrew, _store.GetConversation(HashedKey)!.LastReliableLanguage);
+    }
+
+    [Fact]
+    public void A_site_that_can_be_read_still_waits_for_evidence()
+    {
+        // The narrowing, asserted. WhatsApp reports itself readable even when a chat has no
+        // messages, because an empty chat is a fact rather than a blind spot - so silence there
+        // must stay silence. Without this the product would start writing a remembered language
+        // from whatever layout the user arrived at a quiet chat with, which the log says would
+        // have happened 163 times in a month on that site alone.
+        _layouts.Current = Language.Hebrew;
+
+        var quietChat = new SignalMessage
+        {
+            Site = "web.whatsapp.com",
+            ConversationKey = HashedKey,
+            AdapterVersion = "1.0.0",
+            ComposerEmpty = true,
+            ContextReadable = true,
+            ObservedAt = _clock.Now.ToUnixTimeMilliseconds(),
+            Messages = [],
+        };
+
+        var reply = Parse<DecisionMessage>(_core.Handle(JsonSerializer.Serialize(quietChat, Wire.Json)));
+
+        Assert.Equal("Suppressed", reply.Outcome);
+        Assert.Equal("NoSignal", reply.Blocker);
+        Assert.Null(_store.GetConversation(HashedKey));
+    }
+
+    [Fact]
+    public void A_client_that_does_not_mention_readability_is_taken_to_have_read_the_page()
+    {
+        // Compatibility, and it is the safe direction rather than the convenient one. An extension
+        // older than this field, or anything else speaking this protocol, is understood to mean "I
+        // read the page" - so the engine waits for evidence instead of concluding something from a
+        // silence it cannot interpret.
+        var withoutTheField = """
+            {"type":"signal","protocolVersion":1,"site":"docs.google.com",
+             "conversationKey":"9f2a4c8e1b3d5f7009f2a4c8e1b3d5f7","adapterVersion":"1.0.0",
+             "composerEmpty":true,"messages":[],"observedAt":0}
+            """;
+
+        var reply = Parse<DecisionMessage>(_core.Handle(withoutTheField));
+
+        Assert.Equal("NoSignal", reply.Blocker);
+        Assert.Null(_store.GetConversation(HashedKey));
     }
 
     // --- The Agent trusts Windows, not the page ----------------------------------------------

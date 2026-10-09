@@ -296,7 +296,7 @@ export class GenericAdapter implements SiteAdapter {
     // about, so this reports the same "nothing to see" the WhatsApp adapter reports on its landing
     // screen, and ContentObserver returns without sending anything.
     if (!(active instanceof HTMLElement) || !isWritingField(active) || isSensitive(active)) {
-      return { rawConversationId: null, messages: [], composerEmpty: true };
+      return { rawConversationId: null, messages: [], composerEmpty: true, contextReadable: true };
     }
 
     const identity = fieldIdentity(window.location, active);
@@ -326,6 +326,18 @@ export class GenericAdapter implements SiteAdapter {
             // being handed back as certainty.
             [],
       composerEmpty: empty,
+
+      // Whether anything was visible to read, which on this adapter is a measurement rather than a
+      // property of the site. Below MIN_EVIDENCE_LETTERS there was nothing worth judging by, and
+      // the comment on that constant is the case this reports: a live Google Sheet yields 13
+      // visible characters, because the grid is a canvas and everything the user writes is drawn
+      // rather than written into the DOM.
+      //
+      // A field the user has written in is readable whatever the page around it says - their own
+      // text is right there. The engine never reaches this in that case, since the typing guard
+      // comes first and learns from the layout directly, but a flag that claims a surface is
+      // unreadable while the product is reading it would be a lie the next person has to untangle.
+      contextReadable: !empty || relevantLetters(counts) >= MIN_EVIDENCE_LETTERS,
     };
   }
 

@@ -31,6 +31,12 @@ export interface ConversationSignal {
   readonly messages: readonly MessageSignal[];
   /** PDR section 12 typing guard: a non-empty composer means the user is mid-sentence. */
   readonly composerEmpty: boolean;
+
+  /**
+   * False when this surface is one the adapter cannot read at all - a canvas grid, not an empty
+   * page. See AdapterReading.contextReadable; a boolean, and the only thing it can ever say.
+   */
+  readonly contextReadable: boolean;
   readonly observedAt: number;
 }
 

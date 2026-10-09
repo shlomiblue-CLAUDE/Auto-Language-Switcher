@@ -193,11 +193,25 @@ public sealed class DecisionEngine
 
         // Nothing to go on, and a layout in use that we did not put there.
         //
-        // On a page this is rare. Outside the browser it is the normal case and the only one: an
-        // application offers no text to read, no direction and no composer, so the typing guard
-        // never fires and the manual-change rule needs a transition it may never see. A user who
-        // sets Hebrew in Slack and simply stays there was producing no evidence at all - a live log
-        // showed `memory=none` on the same window once a second for as long as they sat in it.
+        // The normal case wherever there is no text to read: an application outside the browser
+        // offers none, no direction and no composer, so the typing guard never fires and the
+        // manual-change rule needs a transition it may never see. A user who sets Hebrew in Slack
+        // and simply stays there was producing no evidence at all - a live log showed `memory=none`
+        // on the same window once a second for as long as they sat in it.
+        //
+        // It is not only outside the browser, which is what this comment used to say, and saying it
+        // kept the rule from reaching the case it was named after. A spreadsheet draws its grid on
+        // a canvas: the letters the user types are rendered, never written into the DOM, and what
+        // is left to sample is thirteen visible characters of Google's own interface. The adapter
+        // measures that and reports it - see CanReadContext - but every browser signal used to
+        // claim it had read the page, so a sheet came back NoSignal and the product did nothing.
+        // 103 times in a month on this machine, with `memory=none` in 91% of every decision made
+        // there. The user's words: "it does not detect the written language and does not switch."
+        //
+        // A site with an adapter of its own is excluded at the source, by that adapter answering
+        // true. WhatsApp finding no messages means the chat is empty, which is evidence; the same
+        // silence on a canvas means nothing was visible. Treating them alike would have started
+        // 163 of these on WhatsApp alone.
         //
         // Only when there is nothing remembered yet. Once a language is stored, only a deliberate
         // change replaces it, so the layout somebody happened to arrive with cannot overwrite what

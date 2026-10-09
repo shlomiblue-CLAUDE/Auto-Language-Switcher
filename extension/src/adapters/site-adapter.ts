@@ -24,6 +24,23 @@ export interface AdapterReading {
   readonly rawConversationId: string | null;
   readonly messages: readonly ObservedMessage[];
   readonly composerEmpty: boolean;
+
+  /**
+   * Whether this surface is one whose text the adapter can see at all.
+   *
+   * Not the same question as whether it found any, and that is the whole point. An empty chat and a
+   * spreadsheet both yield no messages, and they mean opposite things: the chat really is empty,
+   * which is information, while the grid is drawn on a canvas and the letters the user types never
+   * exist in the DOM to be found. Reported as one "nothing" they were handled as one, and the
+   * engine already has two different answers waiting for them - it had no way to tell which it was
+   * looking at, because every browser signal claimed to be readable.
+   *
+   * False means "do not read anything into the silence here". The engine then falls back to the
+   * rule written for applications outside the browser, where silence is the only possible reading:
+   * the layout somebody is sitting with is itself what they have said. It fills a blank and never
+   * overwrites a choice.
+   */
+  readonly contextReadable: boolean;
 }
 
 export interface AdapterHealth {

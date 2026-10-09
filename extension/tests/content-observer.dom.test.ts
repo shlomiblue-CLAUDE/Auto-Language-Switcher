@@ -20,7 +20,7 @@ function fakeAdapter(): SiteAdapter {
     version: 'test',
     matches: () => true,
     observationRoot: () => document.body,
-    read: () => ({ rawConversationId: 'title:Test', messages: [], composerEmpty: true }),
+    read: () => ({ rawConversationId: 'title:Test', messages: [], composerEmpty: true, contextReadable: true }),
     checkHealth: () => ({ healthy: true, missing: [], tiers: {} }),
   };
 }
@@ -210,7 +210,7 @@ describe('ContentObserver and the cost of typing', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     document.body.innerHTML = '<textarea id="box"></textarea>';
-    reading = { rawConversationId: 'https://example.com|name=body', messages: [], composerEmpty: true };
+    reading = { rawConversationId: 'https://example.com|name=body', messages: [], composerEmpty: true, contextReadable: true };
 
     vi.stubGlobal('chrome', {
       runtime: {

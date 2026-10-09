@@ -260,6 +260,7 @@ export class ContentObserver {
       adapterVersion: this.adapter.version,
       messages: reading.messages,
       composerEmpty: reading.composerEmpty,
+      contextReadable: reading.contextReadable,
       observedAt: Date.now(),
     };
 
@@ -268,7 +269,12 @@ export class ContentObserver {
     // Everything the Agent's answer can turn on that is visible from this page. The layout in use
     // and the foreground window are deliberately absent: the Agent reads both itself, which is why
     // only a keystroke-triggered read may be filtered on this.
-    const fingerprint = JSON.stringify([conversationKey, reading.composerEmpty, reading.messages]);
+    const fingerprint = JSON.stringify([
+      conversationKey,
+      reading.composerEmpty,
+      reading.contextReadable,
+      reading.messages,
+    ]);
     if (typing && fingerprint === this.lastSignalFingerprint) return;
 
     this.lastSignalFingerprint = fingerprint;

@@ -307,6 +307,48 @@ describe('GenericAdapter', () => {
     });
   });
 
+  describe('whether the surface can be read at all', () => {
+    it('says so when there is not enough visible text to judge by', () => {
+      // The spreadsheet, reduced to its measurement. A live Google Sheet yields thirteen visible
+      // characters, because the grid is a canvas: everything the user writes is drawn, never
+      // written into the DOM. The adapter already declined to report evidence that thin - what it
+      // could not do was say which kind of nothing it was looking at, so the engine waited for
+      // text that cannot arrive.
+      const box = field('<div><textarea data-subject aria-label="cell"></textarea><span>A1</span></div>');
+      expect(box).toBeTruthy();
+
+      const reading = adapter.read();
+
+      expect(reading.messages).toEqual([]);
+      expect(reading.contextReadable).toBe(false);
+    });
+
+    it('says the opposite when the page has real text on it', () => {
+      // The distinction has to cut both ways, or it is just a second name for "no messages". A
+      // page with prose on it was read, and silence there would mean something different.
+      field(`<div><p>${ENGLISH_PAGE}</p><textarea data-subject aria-label="reply"></textarea></div>`);
+
+      const reading = adapter.read();
+
+      expect(relevantLetters(reading.messages[0]!.counts)).toBeGreaterThan(0);
+      expect(reading.contextReadable).toBe(true);
+    });
+
+    it('is readable while the user is writing, whatever the page around it says', () => {
+      // Their own text is right there in the field. The engine never reaches the rule that uses
+      // this - the typing guard comes first - but a flag that called the surface unreadable while
+      // the product was reading it would be a lie for somebody else to untangle.
+      const box = field('<div><textarea data-subject aria-label="cell"></textarea></div>');
+      adapter.read();
+      (box as HTMLTextAreaElement).value = 'שלום';
+
+      const reading = adapter.read();
+
+      expect(reading.composerEmpty).toBe(false);
+      expect(reading.contextReadable).toBe(true);
+    });
+  });
+
   describe('emptiness', () => {
     it('a reply box that opens with a signature is still owed a decision', () => {
       // The defect, from a live log: one Gmail thread whose only entry was `Suppressed UserTyping`

@@ -251,6 +251,15 @@ public sealed class AgentCore
             Site = signal.Site,
             Messages = signal.Messages.Select(m => m.ToObservation()).ToList(),
             ComposerEmpty = signal.ComposerEmpty,
+
+            // Taken from the adapter, because only the adapter knows. This used to be left at its
+            // default of true for every browser signal, which made one rule unreachable from the
+            // browser: the one for a surface with nothing to read, where the layout the user is
+            // sitting with is the only thing they have said. It is the rule that makes the product
+            // work in an application outside the browser, and a spreadsheet drawn on a canvas is
+            // that same case arriving through a tab.
+            CanReadContext = signal.ContextReadable,
+
             TargetIsForeground = _layouts.IsBrowserForeground(),
             CurrentLayout = _layouts.CurrentLayout(),
             ObservedAt = now,

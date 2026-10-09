@@ -56,7 +56,7 @@ export class WhatsAppAdapter implements SiteAdapter {
     const main = resolve(SELECTORS.mainPanel).element;
     if (!main) {
       // No conversation open. Not an error - this is the landing screen.
-      return { rawConversationId: null, messages: [], composerEmpty: true };
+      return { rawConversationId: null, messages: [], composerEmpty: true, contextReadable: true };
     }
 
     const panel = resolve(SELECTORS.messagesPanel).element;
@@ -91,6 +91,13 @@ export class WhatsAppAdapter implements SiteAdapter {
 
     return {
       rawConversationId: this.conversationIdFrom(main),
+
+      // Always true, and deliberately so. This adapter reads a conversation; when it finds no
+      // messages the conversation is empty, which is a fact about the chat rather than a blind
+      // spot. Saying otherwise would let the product start writing a remembered language from
+      // whatever layout the user happened to arrive at a quiet chat with - on the one site where
+      // it has real evidence to wait for.
+      contextReadable: true,
       messages,
       composerEmpty: this.isComposerEmpty(),
     };

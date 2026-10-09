@@ -96,6 +96,16 @@ public sealed class SignalMessage
     [JsonPropertyName("messages")] public List<WireMessageStats> Messages { get; set; } = [];
     [JsonPropertyName("composerEmpty")] public bool ComposerEmpty { get; set; } = true;
 
+    /// <summary>
+    /// False when the adapter cannot see this surface's text at all, as distinct from having
+    /// looked and found none. See AdapterReading.contextReadable in the extension.
+    ///
+    /// Defaults to true, which is both the old behaviour and the safe one: an extension older than
+    /// this field, or any other client of this protocol, is taken to mean "I read the page", and
+    /// the engine then waits for evidence rather than concluding anything from silence.
+    /// </summary>
+    [JsonPropertyName("contextReadable")] public bool ContextReadable { get; set; } = true;
+
     /// <summary>Unix milliseconds. Used to reject stale events, per PDR section 9.</summary>
     [JsonPropertyName("observedAt")] public long ObservedAt { get; set; }
 }
