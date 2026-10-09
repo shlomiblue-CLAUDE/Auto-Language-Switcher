@@ -327,8 +327,23 @@ public sealed class DecisionEngine
         if (preference?.Pin is { } pinned)
             return (pinned, 1.0, DecisionSource.ManualPin);
 
-        // 2. What they were typing with last time, while it is still fresh.
+        // 2. What they were typing with last time, while it is still fresh - and while this key is
+        //    still believable as one conversation.
+        //
+        //    Memory outranks analysis because it is the user's own keyboard rather than an
+        //    inference, and that reasoning needs the key to name one thing. When it names several,
+        //    "what they were typing with last time" is what they were typing in a *different*
+        //    conversation, and replaying it is how an application whose window title never changes
+        //    drags somebody into the wrong language on every switch. See
+        //    ConversationPreference.CoversSeveralConversations for what shows that, and what it
+        //    cost on this machine before it did.
+        //
+        //    Nothing is forgotten; it simply stops being replayed. On a page the engine falls
+        //    through to the evidence actually in front of it, which is a worse source and a better
+        //    answer. In an application there is no evidence, so it does nothing - a keystroke
+        //    against a deleted line, which is the trade stated at the top of this file.
         if (preference is { LastReliableLanguage: not Language.Unknown }
+            && !preference.CoversSeveralConversations
             && request.ObservedAt - preference.UpdatedAt <= settings.MemoryTtl)
         {
             return (preference.LastReliableLanguage, 1.0, DecisionSource.ConversationMemory);

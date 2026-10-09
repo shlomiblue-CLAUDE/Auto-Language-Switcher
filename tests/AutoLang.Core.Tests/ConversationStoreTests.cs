@@ -367,4 +367,68 @@ public class ConversationStoreTests : IDisposable
 
         Assert.Equal(Language.Russian, Reopen().GetConversation("dddddddddddddddddddddddddddddddd")!.Pin);
     }
+
+    [Fact]
+    public void Reversals_are_counted_so_a_bucket_can_be_told_from_a_conversation()
+    {
+        // Hebrew, then English, then Hebrew: two corrections that undo each other. That is what a
+        // key covering several conversations looks like from here, and it is the only thing this
+        // counter exists to recognise.
+        _store.NoteManualOverride("k", Language.Hebrew);
+        Assert.Equal(0, _store.GetConversation("k")!.OverrideReversals);
+
+        _store.NoteManualOverride("k", Language.English);
+        Assert.Equal(1, _store.GetConversation("k")!.OverrideReversals);
+
+        _store.NoteManualOverride("k", Language.Hebrew);
+        Assert.Equal(2, _store.GetConversation("k")!.OverrideReversals);
+
+        // Still one conversation at two, which is where every WhatsApp chat in a month of log sat.
+        Assert.False(_store.GetConversation("k")!.CoversSeveralConversations);
+
+        _store.NoteManualOverride("k", Language.English);
+        Assert.True(_store.GetConversation("k")!.CoversSeveralConversations);
+    }
+
+    [Fact]
+    public void Correcting_the_same_way_twice_is_not_a_reversal()
+    {
+        // Somebody setting Hebrew again because the product got it wrong again is agreeing with
+        // themselves, not contradicting themselves. Counting that would mark a conversation whose
+        // language simply moved, which is the mistake the measured threshold exists to avoid.
+        _store.NoteManualOverride("k", Language.Hebrew);
+        _store.NoteManualOverride("k", Language.Hebrew);
+        _store.NoteManualOverride("k", Language.Hebrew);
+
+        Assert.Equal(0, _store.GetConversation("k")!.OverrideReversals);
+        Assert.False(_store.GetConversation("k")!.CoversSeveralConversations);
+    }
+
+    [Fact]
+    public void An_override_that_names_no_language_changes_neither_count_nor_memory()
+    {
+        _store.NoteManualOverride("k", Language.Hebrew);
+        _store.NoteManualOverride("k", Language.Unknown);
+
+        var stored = _store.GetConversation("k")!;
+        Assert.Equal(Language.Hebrew, stored.LastReliableLanguage);
+        Assert.Equal(Language.Hebrew, stored.LastOverrideLanguage);
+        Assert.Equal(0, stored.OverrideReversals);
+    }
+
+    [Fact]
+    public void The_count_survives_a_round_trip_through_the_file()
+    {
+        // It is persisted state, so it has to be. A counter that resets when the Agent restarts
+        // would never reach three on a key the user corrects a few times a day.
+        _store.NoteManualOverride("k", Language.Hebrew);
+        _store.NoteManualOverride("k", Language.English);
+        _store.NoteManualOverride("k", Language.Hebrew);
+
+        var reopened = new ConversationStore(_root, _clock);
+        reopened.Load();
+
+        Assert.Equal(2, reopened.GetConversation("k")!.OverrideReversals);
+        Assert.Equal(Language.Hebrew, reopened.GetConversation("k")!.LastOverrideLanguage);
+    }
 }

@@ -33,10 +33,16 @@
  *
  * HOW TO USE
  *
- *   1. Open the sheet, F12, Console, on the page.
- *   2. Paste this whole file and press Enter.
- *   3. Click into four or five different cells. Type a word in one. Leave the tab and come back.
+ *   1. Open the sheet, F12, Console, on the page. Context selector on `top`.
+ *   2. Paste this whole file and press Enter. Chrome blocks the first paste into a console and
+ *      asks you to type  allow pasting  first; do that, then paste again.
+ *   3. Click into four or five different cells, running  autolangFieldSample()  after each. Type a
+ *      word in one. Leave the tab and come back.
  *   4. Run  autolangFieldReport()  and send the table.
+ *
+ * Step 3 calls the sampler by hand on purpose. A grid on a canvas may keep one hidden editor
+ * focused throughout and never fire focusin, and a one-row table would then be ambiguous between
+ * "the identity held still" and "nothing was sampled".
  *
  * What the answer looks like: if the `field` column changes while `scope` holds still, identity is
  * per-cell and memory can never replay. If `scope` changes, the document itself is being renamed
@@ -118,6 +124,19 @@
   document.addEventListener('visibilitychange', () => sample('visibility'));
 
   sample('start');
+
+  /**
+   * Takes a reading on demand.
+   *
+   * Needed because this cannot assume clicking a cell moves focus in the DOM at all. A grid drawn
+   * on a canvas may keep one hidden editor focused the whole time and never fire focusin, and then
+   * a table with a single row in it would be ambiguous between "identity held still" and "nothing
+   * was sampled" - which are opposite answers. Calling this after each cell removes the ambiguity.
+   */
+  window.autolangFieldSample = () => {
+    sample('manual');
+    return samples[samples.length - 1];
+  };
 
   window.autolangFieldReport = () => {
     const distinct = new Set(samples.map((r) => `${r.scope}|${r.attribute}|${r.field}`));

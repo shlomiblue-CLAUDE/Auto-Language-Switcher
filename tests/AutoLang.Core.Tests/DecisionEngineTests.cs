@@ -361,6 +361,111 @@ public class DecisionEngineTests
     }
 
     [Fact]
+    public void A_key_the_user_keeps_reversing_stops_having_its_memory_replayed()
+    {
+        // Reported: "when I switch to Claude in a Hebrew conversation it stays on English."
+        //
+        // The Claude desktop app calls its window "Claude" and nothing else - read live off the
+        // machine, not guessed - so every conversation in it hashes to one key. One memory for all
+        // of them, and the last one seen wins. The log: 479 decisions on that single key over 20
+        // days, corrected by hand 15 times, reversing direction 9 of those.
+        //
+        // There is no fixing the identity. Telling two Claude conversations apart means reading the
+        // application's interface, which is the one thing this product refuses. What is left is to
+        // stop acting on a memory that has been shown to belong to something else.
+        var bucket = new ConversationPreference
+        {
+            LastReliableLanguage = Language.English,
+            LastOverrideLanguage = Language.English,
+            OverrideReversals = 3,
+            UpdatedAt = _clock.Now,
+        };
+
+        Assert.True(bucket.CoversSeveralConversations);
+
+        // An application offers nothing to read, so with memory withdrawn there is nothing at all -
+        // and nothing is the right answer. It costs a keystroke instead of a wrong switch.
+        var decision = Decide(
+            Request(currentLayout: Language.Hebrew) with { CanReadContext = false },
+            preference: bucket);
+
+        Assert.NotEqual(DecisionOutcome.Switch, decision.Outcome);
+        Assert.Equal(DecisionBlocker.NoSignal, decision.Blocker);
+    }
+
+    [Fact]
+    public void A_conversation_that_merely_changed_language_keeps_its_memory()
+    {
+        // The regression guard the threshold exists for, and the reason it counts reversals rather
+        // than corrections. A chat that was Hebrew for a month and is English now has been
+        // corrected, perhaps more than once, and it is still one conversation.
+        //
+        // The first version of this rule asked for two overrides in two different languages. The
+        // log threw it out: that marked 14 keys and 9 of them were ordinary WhatsApp chats, which
+        // is the product's main use case. Across the same month no chat reversed more than twice,
+        // so the bar is three.
+        var drifted = new ConversationPreference
+        {
+            LastReliableLanguage = Language.English,
+            LastOverrideLanguage = Language.English,
+            OverrideReversals = 2,
+            UpdatedAt = _clock.Now,
+        };
+
+        Assert.False(drifted.CoversSeveralConversations);
+
+        var decision = Decide(Request(currentLayout: Language.Hebrew), preference: drifted);
+
+        Assert.Equal(DecisionOutcome.Switch, decision.Outcome);
+        Assert.Equal(Language.English, decision.Language);
+        Assert.Equal(DecisionSource.ConversationMemory, decision.Source);
+    }
+
+    [Fact]
+    public void A_pin_still_outranks_everything_on_a_key_that_covers_several_conversations()
+    {
+        // The escape hatch, and the reason the counter never needs to decay. Somebody who really
+        // does write both languages in one place can say so, and a pin is an instruction rather
+        // than an observation - so it is not subject to a rule about unreliable observations.
+        var pinned = new ConversationPreference
+        {
+            Mode = ConversationMode.Pinned,
+            PinnedLanguage = Language.Hebrew,
+            OverrideReversals = 9,
+            UpdatedAt = _clock.Now,
+        };
+
+        var decision = Decide(Request(currentLayout: Language.English), preference: pinned);
+
+        Assert.Equal(DecisionOutcome.Switch, decision.Outcome);
+        Assert.Equal(Language.Hebrew, decision.Language);
+        Assert.Equal(DecisionSource.ManualPin, decision.Source);
+    }
+
+    [Fact]
+    public void A_readable_page_falls_back_to_its_evidence_rather_than_to_nothing()
+    {
+        // Withdrawing memory is not the same as going silent. Where there is something to read,
+        // the engine reads it - a worse source than the user's own keyboard, and a better answer
+        // than the keyboard they were using in a different conversation.
+        var bucket = new ConversationPreference
+        {
+            LastReliableLanguage = Language.English,
+            LastOverrideLanguage = Language.English,
+            OverrideReversals = 4,
+            UpdatedAt = _clock.Now,
+        };
+
+        var decision = Decide(
+            Request([Outgoing(Language.Hebrew, 40)], currentLayout: Language.English),
+            preference: bucket);
+
+        Assert.Equal(DecisionOutcome.Switch, decision.Outcome);
+        Assert.Equal(Language.Hebrew, decision.Language);
+        Assert.Equal(DecisionSource.OutgoingMessages, decision.Source);
+    }
+
+    [Fact]
     public void A_noted_manual_change_hands_the_layout_back_to_the_user()
     {
         // NoteManualChange is how the Agent reports that the user took over. After it, even the

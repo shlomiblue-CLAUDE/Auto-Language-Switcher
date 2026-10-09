@@ -180,11 +180,25 @@ public sealed class ConversationStore
     /// <summary>Starts the cooldown that stops the product arguing with a user who just overrode it.</summary>
     public void NoteManualOverride(string conversationKey, Language language)
     {
-        Update(conversationKey, existing => existing with
+        Update(conversationKey, existing =>
         {
-            ManualOverrideAt = _clock.Now,
-            LastReliableLanguage = language == Language.Unknown ? existing.LastReliableLanguage : language,
-            UpdatedAt = _clock.Now
+            // A reversal is a correction that undoes the previous one. Counted here because this is
+            // the only place that sees both, and incrementally because the alternative - keeping
+            // the history - would be a growing list of the user's corrections on disk for a
+            // question answered by one integer.
+            bool reversed =
+                language != Language.Unknown
+                && existing.LastOverrideLanguage != Language.Unknown
+                && existing.LastOverrideLanguage != language;
+
+            return existing with
+            {
+                ManualOverrideAt = _clock.Now,
+                LastReliableLanguage = language == Language.Unknown ? existing.LastReliableLanguage : language,
+                LastOverrideLanguage = language == Language.Unknown ? existing.LastOverrideLanguage : language,
+                OverrideReversals = reversed ? existing.OverrideReversals + 1 : existing.OverrideReversals,
+                UpdatedAt = _clock.Now
+            };
         });
     }
 
